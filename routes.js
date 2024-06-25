@@ -32,6 +32,7 @@ router.get("/auth", function(req,res){
         // parameters can be immmediately puy on the function, making the code cleaner
         const result = stmt.get(req.query.id,req.query.username);
         var jsonOutput = {}
+        
         if (result){
             const httpCode = 200;
             const msg = "Authorization Failed, Rod cannot be transferred to another player";
