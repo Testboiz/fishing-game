@@ -1,10 +1,8 @@
-const { json } = require('docker/src/languages');
 const express = require('express');
-const sqlite = require('sqlite3');
 const router = express.Router();
-// const db = new sqlite.Database('./fish-hunt.db');
 const db = require('better-sqlite3')('./fish-hunt.db')
 
+// default handling of error
 function handleDBError(err, res){
     jsonOutput = {
         message : "the database blew up",
@@ -13,6 +11,7 @@ function handleDBError(err, res){
     res.status(jsonOutput["status"]).json(jsonOutput);
 }
 
+// generate standardized structure of json
 function generateJSONSkeleton(objectOrMessage, httpCode){
     return {
         message : objectOrMessage,
@@ -41,7 +40,7 @@ router.get("/auth", function(req,res){
         else{
             const httpCode = 403;
             const msg = "Authorization Failed, Rod cannot be transferred to another player";
-            generateJSONSkeleton(msg, httpCode);
+            jsonOutput = generateJSONSkeleton(msg, httpCode);
         }
         res.status(jsonOutput["status"]).json(jsonOutput);
     }
