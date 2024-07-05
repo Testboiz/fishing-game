@@ -32,7 +32,7 @@ router.get("/auth", function(req,res){
         // parameters can be immmediately puy on the function, making the code cleaner
         const result = stmt.get(req.query.id,req.query.username);
         var jsonOutput = {}
-        
+
         if (result){
             const httpCode = 200;
             const msg = "Authorization Failed, Rod cannot be transferred to another player";
@@ -61,6 +61,106 @@ router.get("/fish", function(_, res){
     }
 });
 
+router.put("/buoy/connect", function(req,res){
+    try{
+        const query = "UPDATE rod_info SET selected_buoy = ?";
+        const buoy_id = req.query.buoyID;
+        const stmt = db.prepare(query);
+        stmt.run(buoy_id); 
+    }
+    catch (err){
+        handleDBError(err,res);
+    }
+});
+
+
+
+router.put("buoy/cast", function(req, res){
+    const sqlForFish = `
+WITH probability AS (
+    SELECT ABS(RANDOM() / CAST(-9223372036854775808 AS REAL)) AS probability
+)
+SELECT f.fish_name, f.fish_value FROM fish AS f, probability AS pr, fish_probability AS p
+    JOIN fish_probability ON (f.fish_probability_class = p.probability_class)
+    JOIN probability ON pr.probability < p.probability_value OR f.fish_probability_class = "Common"
+    WHERE (pr.probability < p.probability_value OR f.fish_probability_class = "Common") 
+    ORDER BY RANDOM()
+    LIMIT 1       
+;
+`;
+    const sqlForRank = `
+WITH ranked_fishers AS (
+SELECT
+    player_username,
+    player_display_name,
+    xp,
+    DENSE_RANK() OVER (ORDER BY xp DESC) AS rank
+FROM
+    rank_overall
+)
+SELECT
+    ro1.player_username,
+    ro1.player_display_name,
+    ro1.xp,
+    ro1.rank,
+    ro2.player_display_name AS above_display_name,
+    ro2.xp - ro1.xp AS xp_difference,
+    ro2.rank AS above_rank
+FROM
+    ranked_fishers ro1
+LEFT JOIN -- self join
+    ranked_fishers ro2 ON ro1.rank = ro2.rank + 1
+WHERE ro1.player_username = ?;
+    `;
+    const sqlForWorms = `
+UPDATE rod_info 
+SET 
+    small_worms = CASE WHEN selected_worm = 1 THEN small_worms - 1 ELSE small_worms END,
+    tasty_worms = CASE WHEN selected_worm = 2 THEN tasty_worms - 1 ELSE tasty_worms END,
+    enchanted_worms = CASE WHEN selected_worm = 3 THEN enchanted_worms - 1 ELSE enchanted_worms END,
+    magic_worms = CASE WHEN selected_worm = 4 THEN magic_worms - 1 ELSE magic_worms END
+WHERE rod_uuid = ?;
+    `;
+    const sqlForBuoys = `
+UPDATE buoy 
+    SET 
+    buoy_balance = buoy_balance - ?,
+    fishpot = fishpot +  ? * 0.01
+WHERE buoy_uuid = ?;
+    `;
+    const sqlSpookHandling = `
+INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES ("foo","bar","baz")
+    ON CONFLICT (buoy_uuid, player_username) DO UPDATE SET casts = casts + 1;
+    `;
+    try{
+        const player_username = req.query.player_username;
+        const buoy_uuid = req.query.buoy_uuid;
+        const rod_uuid = req.query.rod_uuid;
+
+        // TODO : figure out how to deal with buoys
+
+        const stmtFish = db.prepare(sqlForFish);
+        const stmtRank = db.prepare(sqlForRank);
+        const stmtWorm = db.prepare(sqlForWorms);
+        const stmtBuoy = db.prepare(sqlForBuoys);
+        const stmtSpookHandling = db.prepare(sqlSpookHandling);
+
+        var message = "";
+    }
+    catch(err){
+        handleDBError(err,res)
+    }
+});
+
+router.put("buoy-handle", function(req,res){
+    try{
+        const sql = "";
+        const stmt = db.prepare();
+    }
+    catch(err){
+
+    }
+});
 // other than the already defined routes
 router.all('*', function(_,res){
     res.status(404)
