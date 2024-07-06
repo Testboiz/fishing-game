@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const db = require('better-sqlite3')('./fish-hunt.db')
+const db = require('better-sqlite3')('./fish-hunt.db');
+db.pragma('journal_mode = WAL');
 
 // default handling of error
 function handleDBError(err, res){
@@ -80,9 +81,10 @@ router.put("buoy/cast", function(req, res){
 WITH probability AS (
     SELECT ABS(RANDOM() / CAST(-9223372036854775808 AS REAL)) AS probability
 )
-SELECT f.fish_name, f.fish_value FROM fish AS f, probability AS pr, fish_probability AS p
+SELECT f.fish_name, f.fish_value, c.casts FROM fish AS f, probability AS pr, fish_probability AS p, buoy_casts AS c
     JOIN fish_probability ON (f.fish_probability_class = p.probability_class)
     JOIN probability ON pr.probability < p.probability_value OR f.fish_probability_class = "Common"
+    JOIN buoy_casts ON c.buoy_uuid = ? AND c.player_username = ?
     WHERE (pr.probability < p.probability_value OR f.fish_probability_class = "Common") 
     ORDER BY RANDOM()
     LIMIT 1       
@@ -94,7 +96,7 @@ SELECT
     player_username,
     player_display_name,
     xp,
-    DENSE_RANK() OVER (ORDER BY xp DESC) AS rank
+    RANK() OVER (ORDER BY xp DESC) AS rank
 FROM
     rank_overall
 )
@@ -108,7 +110,7 @@ SELECT
     ro2.rank AS above_rank
 FROM
     ranked_fishers ro1
-LEFT JOIN -- self join
+LEFT JOIN 
     ranked_fishers ro2 ON ro1.rank = ro2.rank + 1
 WHERE ro1.player_username = ?;
     `;
@@ -128,26 +130,47 @@ UPDATE buoy
     fishpot = fishpot +  ? * 0.01
 WHERE buoy_uuid = ?;
     `;
-    const sqlSpookHandling = `
-INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES ("foo","bar","baz")
+    const sqlCastHandling = `
+INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
     ON CONFLICT (buoy_uuid, player_username) DO UPDATE SET casts = casts + 1;
     `;
+
+    const sqlUpdateAfterCast = `
+UPDATE player 
+SET 
+    xp = xp + ?,
+    linden_balance = linden_balance + ?
+    WHERE player_username = ?;
+    `
     try{
         const player_username = req.query.player_username;
         const buoy_uuid = req.query.buoy_uuid;
         const rod_uuid = req.query.rod_uuid;
 
-        // TODO : figure out how to deal with buoys
-
         const stmtFish = db.prepare(sqlForFish);
         const stmtRank = db.prepare(sqlForRank);
         const stmtWorm = db.prepare(sqlForWorms);
         const stmtBuoy = db.prepare(sqlForBuoys);
-        const stmtSpookHandling = db.prepare(sqlSpookHandling);
+        const stmtCastHandling = db.prepare(sqlCastHandling);
+        const stmtupdateAfterCast = db.prepare(sqlUpdateAfterCast);
+
+        stmtCastHandling.run(buoy_uuid,player_username);
+        stmtWorm.run(rod_uuid);
+        
+        // TODO handle spook
+        const fishCaught = stmtFish.get();
+        const rankInfo = stmtRank.get(player_username);
+
+        // if error, buoy empty
+        stmtBuoy.run()
+
+        stmtupdateAfterCast.run()
 
         var message = "";
+        res.json(generateJSONSkeleton(message,200));
     }
     catch(err){
+        // TODO handle empty buoy here
         handleDBError(err,res)
     }
 });
