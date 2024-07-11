@@ -26,6 +26,49 @@ function formatMultilineStringToNormal(inputString) {
     return escapedString;
 }
 
+function sqlToJsDate(sqlDate) {
+    // Split the SQL datetime string into an array
+    var sqlDateArr = sqlDate.split("-");
+    var year = parseInt(sqlDateArr[0]);
+    var month = parseInt(sqlDateArr[1]) - 1; // Months are zero-based in JavaScript
+    var dayTime = sqlDateArr[2].split(" ");
+    var day = parseInt(dayTime[0]);
+    var time = dayTime[1].split(":");
+    var hour = parseInt(time[0]);
+    var minute = parseInt(time[1]);
+    var second = parseInt(time[2]);
+
+    // Create a new Date object
+    var jsDate = new Date(year, month, day, hour, minute, second);
+
+    return jsDate;
+}
+
+function checkSpook(res, buoy_uuid, rod_uuid) {
+    try {
+        const sql = `
+SELECT casts, previous_spook_time FROM buoy_casts
+WHERE buoy_uuid = ?, rod_uuid = ?
+        `
+        const stmt = db.prepare(sql);
+        const rows = stmt.get(buoy_uuid, rod_uuid);
+        const HTTP_TOO_MANY_REQUESTS = 429;
+        const HOURS_IN_YEARS = 24;
+        const date = sqlToJsDate(rows.previous_spook_timem);
+        const dateNow = new Date();
+        const hoursDifference = dateNow.getHours() - date.getHours();
+
+        if (rows.rod_uuid === 0 && hoursDifference < HOURS_IN_YEARS){
+            res.status(HTTP_TOO_MANY_REQUESTS).json(
+                generateJSONSkeleton("You have Spooked this buoy",HTTP_TOO_MANY_REQUESTS))
+        }
+
+    }
+    catch (err){
+        handleDBError(err,res);
+    }
+}
+
 
 function ensureParametersOrValueNotNull(paramObject){
     if (paramObject === null || paramObject === undefined){
@@ -38,12 +81,13 @@ function ensureParametersOrValueNotNull(paramObject){
     }
 }
 
-function buoyLogin(buoy_id, rod_uuid){
+function buoyLogin(res, buoy_id, rod_uuid){
     try{
         const query = "UPDATE rod_info SET buoy_fished = ? WHERE rod_uuid = ?";
         ensureParametersOrValueNotNull(buoy_id);
         const stmt = db.prepare(query);
         stmt.run(buoy_id, rod_uuid); 
+        checkSpook(res, buoy_id, rod_uuid);
     }
     catch (err) {
         throw err
@@ -72,14 +116,14 @@ router.get("/auth", function(req,res){
         var jsonOutput = {}
 
         if (result){
-            const httpCode = 200;
+            const HTTP_OK = 200;
             const msg = "Authorization Failed, Rod cannot be transferred to another player";
-            jsonOutput = generateJSONSkeleton(msg, httpCode);
+            jsonOutput = generateJSONSkeleton(msg, HTTP_OK);
         }
         else{
-            const httpCode = 403;
+            const HTTP_ERR_FORBIDDEN = 403;
             const msg = "Authorization Failed, Rod cannot be transferred to another player";
-            jsonOutput = generateJSONSkeleton(msg, httpCode);
+            jsonOutput = generateJSONSkeleton(msg, HTTP_ERR_FORBIDDEN);
         }
         res.status(jsonOutput["status"]).json(jsonOutput);
     }
@@ -106,10 +150,9 @@ router.put("/cast", function(req, res){
 WITH probability AS (
     SELECT ABS(RANDOM() / CAST(-9223372036854775808 AS REAL)) AS probability
 )
-SELECT f.fish_name, f.fish_value, c.casts FROM fish AS f, probability AS pr, fish_probability AS p, buoy_casts AS c
+SELECT f.fish_name, f.fish_value FROM fish AS f, probability AS pr, fish_probability AS p
     JOIN fish_probability ON (f.fish_probability_class = p.probability_class)
     JOIN probability ON pr.probability < p.probability_value OR f.fish_probability_class = 'Common'
-    JOIN buoy_casts ON c.buoy_uuid = ? AND c.player_username = ?
     WHERE (pr.probability < p.probability_value OR f.fish_probability_class = 'Common') 
     ORDER BY RANDOM()
     LIMIT 1       
@@ -193,12 +236,11 @@ SET
         const stmtCastHandling = db.prepare(sqlCastHandling);
         const stmtupdateAfterCast = db.prepare(sqlUpdateAfterCast);
 
-        buoyLogin(params.buoy_uuid, params.rod_uuid);
+        buoyLogin(res, params.buoy_uuid, params.rod_uuid);
 
         stmtCastHandling.run(params.buoy_uuid,params.player_username);
         stmtWorm.run(params.rod_uuid);
         
-        // TODO handle spook
         const fishCaught = stmtFish.get(params.buoy_uuid,params.player_username);
         const wormInfo = stmtWormInfo.get(params.rod_uuid);
 
@@ -219,6 +261,7 @@ SET
             },
             fish : fishCaught.fish_name,
             xp : rankInfo.xp,
+            debugCast : fishCaught.casts,
             earnings : {
                 linden_balance : rankInfo.linden_balance,
                 fish_value : fishCaught.fish_value

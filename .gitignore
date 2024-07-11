@@ -3,3 +3,5 @@ fish-hunt.db/
 fish-hunt.db
 *.db-shm
 *.db-wal
+.vscode/
+*.sql
