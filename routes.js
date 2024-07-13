@@ -171,12 +171,19 @@ router.put("/cast", function(req, res){
 WITH probability AS (
     SELECT ABS(RANDOM() / CAST(-9223372036854775808 AS REAL)) AS probability
 )
-SELECT f.fish_name, f.fish_value FROM fish AS f, probability AS pr, fish_probability AS p
-    JOIN fish_probability ON (f.fish_probability_class = p.probability_class)
-    JOIN probability ON pr.probability < p.probability_value OR f.fish_probability_class = 'Common'
-    WHERE (pr.probability < p.probability_value OR f.fish_probability_class = 'Common') 
-    ORDER BY RANDOM()
-    LIMIT 1       
+SELECT 
+    f.fish_name, 
+    f.fish_value,
+    (SELECT buoy_multiplier FROM buoy WHERE buoy_uuid = ?) AS multiplier
+FROM 
+    fish AS f, 
+    probability AS pr, 
+    fish_probability AS p
+        JOIN fish_probability ON (f.fish_probability_class = p.probability_class)
+        JOIN probability ON pr.probability < p.probability_value OR f.fish_probability_class = 'Common'
+        WHERE (pr.probability < p.probability_value OR f.fish_probability_class = 'Common') 
+        ORDER BY RANDOM()
+        LIMIT 1       
 ;
 `;
     const sqlForRank = `
@@ -266,14 +273,15 @@ SET
             stmtCastHandling.run(params.buoy_uuid,params.player_username);
             stmtWorm.run(params.rod_uuid);
         
-            fishCaught = stmtFish.get();
+            fishCaught = stmtFish.get(params.buoy_uuid);
             wormInfo = stmtWormInfo.get(params.rod_uuid);
+            fish_value_multiplied = fishCaught.fish_value * fishCaught.multiplier;
 
             // if error, buoy empty
-            stmtBuoy.run(fishCaught.fish_value, fishCaught.fish_value * FISHPOT_RATE, params.buoy_uuid)
+            stmtBuoy.run(fish_value_multiplied, fish_value_multiplied * FISHPOT_RATE, params.buoy_uuid)
         
             stmtForUpdateRank.run(TEMP_XP, params.player_username);
-            stmtupdateAfterCast.run(fishCaught.fish_value,params.player_username)
+            stmtupdateAfterCast.run(fish_value_multiplied,params.player_username)
 
             rankInfo = stmtRank.get(params.player_username);
         });
@@ -292,7 +300,7 @@ SET
             debugCast : fishCaught.casts,
             earnings : {
                 linden_balance : rankInfo.linden_balance,
-                fish_value : fishCaught.fish_value
+                fish_value : fish_value_multiplied
             },
             rank_info : {
                 rank : rankInfo.rank,
