@@ -34,7 +34,7 @@ function formatMultilineStringToNormal(inputString) {
     return escapedString;
 }
 
-function sqlToJsDate(sqlDate) {
+function sqlToJsDateUTC(sqlDate) {
     // Split the SQL datetime string into an array
     var sqlDateArr = sqlDate.split("-");
     var year = parseInt(sqlDateArr[0]);
@@ -47,28 +47,34 @@ function sqlToJsDate(sqlDate) {
     var second = parseInt(time[2]);
 
     // Create a new Date object
-    var jsDate = new Date(year, month, day, hour, minute, second);
+    var jsDate = new Date(Date.UTC(year, month, day, hour, minute, second));
 
     return jsDate;
 }
 
 function checkSpook(res, buoy_uuid, player_username) {
     try {
+        const HTTP_TOO_MANY_REQUESTS = 429;
+        const MILISECONDS_IN_DAY = 24*60*60*1000;
         const sql = `
 SELECT casts, previous_spook_time FROM buoy_casts
 WHERE buoy_uuid = ? AND player_username = ?;`;
         const stmt = db.prepare(sql);
         const rows = stmt.get(buoy_uuid, player_username);
-        const HTTP_TOO_MANY_REQUESTS = 429;
-        const MILISECONDS_IN_DAY = 24*60*60*1000;
-        const date = sqlToJsDate(rows.previous_spook_time);
-        const dateAfterTwentyFourHours = new Date();
-        dateAfterTwentyFourHours.setDate(date.getDate() + 1);
-        const dateNow = new Date();
-        const hoursDifference = dateNow.getTime() - date.getTime();
+        const dateSql = sqlToJsDateUTC(rows.previous_spook_time);
 
-        if (rows.casts === 0 && hoursDifference < MILISECONDS_IN_DAY){
-            var msg = "Oops, You have Spooked this buoy, you can come back in "
+        const dateAfterTwentyFourHours = new Date(dateSql);
+        dateAfterTwentyFourHours.setUTCDate(dateSql.getUTCDate() + 1);
+
+        const now = new Date();
+        const timeDifference = dateAfterTwentyFourHours.getTime() - now.getTime();
+
+        const date_hh_mm_ss = new Date(null);
+        date_hh_mm_ss.setTime(timeDifference); 
+        const remainingTime = date_hh_mm_ss.toISOString().slice(11, 19);
+
+        if (rows.casts === 0 && timeDifference <= MILISECONDS_IN_DAY && timeDifference >= 0){
+            var msg = `Oops, You have Spooked this buoy, you can come back in ${remainingTime}`
             res.status(HTTP_TOO_MANY_REQUESTS).json(
                 generateJSONSkeleton(msg,HTTP_TOO_MANY_REQUESTS))
             return false; // fail
@@ -105,7 +111,6 @@ function buoyLogin(res, buoy_uuid, rod_uuid, player_username){
         }
     }
     catch (err) {
-        console.log("i got thrown");
         throw err
     }
 }
@@ -254,20 +259,26 @@ SET
         // Note : would be refactored to reduce queries
         const loginSuccess = buoyLogin(res, params.buoy_uuid, params.rod_uuid, params.player_username);
         if (!loginSuccess) return;
-
-        stmtCastHandling.run(params.buoy_uuid,params.player_username);
-        stmtWorm.run(params.rod_uuid);
         
-        const fishCaught = stmtFish.get();
-        const wormInfo = stmtWormInfo.get(params.rod_uuid);
+        let fishCaught, wormInfo, rankInfo;
 
-        // if error, buoy empty
-        stmtBuoy.run(fishCaught.fish_value, fishCaught.fish_value * FISHPOT_RATE, params.buoy_uuid)
+        const castTransaction = db.transaction(function(){
+            stmtCastHandling.run(params.buoy_uuid,params.player_username);
+            stmtWorm.run(params.rod_uuid);
         
-        stmtForUpdateRank.run(TEMP_XP, params.player_username);
-        stmtupdateAfterCast.run(fishCaught.fish_value,params.player_username)
+            fishCaught = stmtFish.get();
+            wormInfo = stmtWormInfo.get(params.rod_uuid);
 
-        const rankInfo = stmtRank.get(params.player_username);
+            // if error, buoy empty
+            stmtBuoy.run(fishCaught.fish_value, fishCaught.fish_value * FISHPOT_RATE, params.buoy_uuid)
+        
+            stmtForUpdateRank.run(TEMP_XP, params.player_username);
+            stmtupdateAfterCast.run(fishCaught.fish_value,params.player_username)
+
+            rankInfo = stmtRank.get(params.player_username);
+        });
+
+        castTransaction();
 
         const debugObj = {
             worms : {
@@ -318,7 +329,6 @@ RANK (monthly):  Coming Soon!
             if (err.message.includes("buoy_balance_cant_negative")){
                 const HTTP_ERROR_CONFLICT = 409
                 const message = "Oops this place has run out of fishes!";
-                console.log(err.message);
                 res.status(HTTP_ERROR_CONFLICT).json(generateJSONSkeleton(message,HTTP_ERROR_CONFLICT))
             }
             else{
