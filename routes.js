@@ -13,6 +13,14 @@ function handleDBError(err, res){
     res.status(jsonOutput["status"]).json(jsonOutput);
 }
 
+// router.use(function (req,res,next){
+//     // handle buoy login, if wants to cast
+//     if (req.params.buoy_uuid){
+//         // handle buoy login
+//     }
+//     next();
+// })
+
 // generate standardized structure of json
 function generateJSONSkeleton(objectOrMessage, httpCode){
     return {
@@ -44,28 +52,31 @@ function sqlToJsDate(sqlDate) {
     return jsDate;
 }
 
-function checkSpook(res, buoy_uuid, rod_uuid) {
+function checkSpook(res, buoy_uuid, player_username) {
     try {
         const sql = `
 SELECT casts, previous_spook_time FROM buoy_casts
-WHERE buoy_uuid = ?, rod_uuid = ?
-        `
+WHERE buoy_uuid = ? AND player_username = ?;`;
         const stmt = db.prepare(sql);
-        const rows = stmt.get(buoy_uuid, rod_uuid);
+        const rows = stmt.get(buoy_uuid, player_username);
         const HTTP_TOO_MANY_REQUESTS = 429;
-        const HOURS_IN_YEARS = 24;
-        const date = sqlToJsDate(rows.previous_spook_timem);
+        const MILISECONDS_IN_DAY = 24*60*60*1000;
+        const date = sqlToJsDate(rows.previous_spook_time);
+        const dateAfterTwentyFourHours = new Date();
+        dateAfterTwentyFourHours.setDate(date.getDate() + 1);
         const dateNow = new Date();
-        const hoursDifference = dateNow.getHours() - date.getHours();
+        const hoursDifference = dateNow.getTime() - date.getTime();
 
-        if (rows.rod_uuid === 0 && hoursDifference < HOURS_IN_YEARS){
+        if (rows.casts === 0 && hoursDifference < MILISECONDS_IN_DAY){
+            var msg = "Oops, You have Spooked this buoy, you can come back in "
             res.status(HTTP_TOO_MANY_REQUESTS).json(
-                generateJSONSkeleton("You have Spooked this buoy",HTTP_TOO_MANY_REQUESTS))
+                generateJSONSkeleton(msg,HTTP_TOO_MANY_REQUESTS))
+            return false; // fail
         }
-
+        return true; // success
     }
     catch (err){
-        handleDBError(err,res);
+        throw err;
     }
 }
 
@@ -81,15 +92,20 @@ function ensureParametersOrValueNotNull(paramObject){
     }
 }
 
-function buoyLogin(res, buoy_id, rod_uuid){
+function buoyLogin(res, buoy_uuid, rod_uuid, player_username){
     try{
-        const query = "UPDATE rod_info SET buoy_fished = ? WHERE rod_uuid = ?";
-        ensureParametersOrValueNotNull(buoy_id);
+        const query = "UPDATE rod_info SET buoy_fished = ? WHERE rod_uuid = ? ";
+        ensureParametersOrValueNotNull(buoy_uuid);
         const stmt = db.prepare(query);
-        stmt.run(buoy_id, rod_uuid); 
-        checkSpook(res, buoy_id, rod_uuid);
+        stmt.run(buoy_uuid, rod_uuid); 
+        if (checkSpook(res, buoy_uuid, player_username)){
+            return true // success
+        } else {
+            return false // fail
+        }
     }
     catch (err) {
+        console.log("i got thrown");
         throw err
     }
 }
@@ -182,10 +198,9 @@ SELECT
     ro2.rank AS above_rank
 FROM
     ranked_fishers AS ro1
-LEFT JOIN -- self join
+LEFT JOIN 
     ranked_fishers AS ro2 ON ro1.rank = ro2.rank + 1
 WHERE ro1.player_username = ?;
-
     `;
     const sqlForWorms = `
 UPDATE rod_info 
@@ -236,12 +251,14 @@ SET
         const stmtCastHandling = db.prepare(sqlCastHandling);
         const stmtupdateAfterCast = db.prepare(sqlUpdateAfterCast);
 
-        buoyLogin(res, params.buoy_uuid, params.rod_uuid);
+        // Note : would be refactored to reduce queries
+        const loginSuccess = buoyLogin(res, params.buoy_uuid, params.rod_uuid, params.player_username);
+        if (!loginSuccess) return;
 
         stmtCastHandling.run(params.buoy_uuid,params.player_username);
         stmtWorm.run(params.rod_uuid);
         
-        const fishCaught = stmtFish.get(params.buoy_uuid,params.player_username);
+        const fishCaught = stmtFish.get();
         const wormInfo = stmtWormInfo.get(params.rod_uuid);
 
         // if error, buoy empty
@@ -297,8 +314,17 @@ RANK (monthly):  Coming Soon!
         res.json(generateJSONSkeleton(debugObj,200));
     }
     catch(err){
-        // TODO handle empty buoy here
-        handleDBError(err,res)
+        if (!res.headersSent){
+            if (err.message.includes("buoy_balance_cant_negative")){
+                const HTTP_ERROR_CONFLICT = 409
+                const message = "Oops this place has run out of fishes!";
+                console.log(err.message);
+                res.status(HTTP_ERROR_CONFLICT).json(generateJSONSkeleton(message,HTTP_ERROR_CONFLICT))
+            }
+            else{
+                handleDBError(err,res);
+            }
+        }
     }
 });
 
