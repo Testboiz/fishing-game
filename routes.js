@@ -5,8 +5,6 @@ const db = require('better-sqlite3')('./fish-hunt.db');
 
 db.pragma('journal_mode = WAL');
 
-const buoyCache = {};
-
 // default handling of error
 function handleDBError(err, res){
     jsonOutput = {
@@ -36,6 +34,38 @@ function ensureParametersOrValueNotNull(paramObject){
             throw new Error("One of the params are null or undefined");
         }
     }
+}
+
+// Helper function to handle the complexity of multiline string handling
+function generateResponseString(fishCaught, wormInfo, rankInfo){
+    var strArray = [
+        `
+Small Worms: ${wormInfo.small_worms}
+Tasty Worms: ${wormInfo.tasty_worms}
+Enchanted Worms: ${wormInfo.enchanted_worms}
+Magic Worms: ${wormInfo.magic_worms}
+Gold : Coming Soon!
+
+        `,
+        `
+You caught ${fishCaught.fish_name}
+Fishing Exp: ${rankInfo.xp} (+1)
+Fish: Coming Soon!
+Your Earnings: ${rankInfo.linden_balance} L$ (+${fishCaught.fish_value}) 
+Rank Extras!: Coming Soon!
+Kingdoms Coming Soon! 
+
+        `,
+        `
+Rank (overall):  ${rankInfo.rank}        
+        `,
+        (rankInfo.rank === '1') // Note : its string
+        ? `${rankInfo.xp_difference} XP to beat ${rankInfo.above_display_name}  ranked ${rankInfo.above_rank}.`
+        : `You are the top fisher!`,
+        `\n`,
+        `Rank (monthly):  Coming Soon!`
+    ]
+    return strArray.join("\n");
 }
 
 router.get("/", function(_, res){
@@ -188,11 +218,10 @@ SET
             wormInfo = stmtWormInfo.get(req.params.rod_uuid);
             fish_value_multiplied = fishCaught.fish_value * fishCaught.multiplier;
 
-            // if error, buoy empty
-            stmtBuoy.run(fish_value_multiplied, fish_value_multiplied * FISHPOT_RATE, req.params.buoy_uuid)
+            stmtBuoy.run(fish_value_multiplied, fish_value_multiplied * FISHPOT_RATE, req.params.buoy_uuid);
         
             stmtForUpdateRank.run(TEMP_XP, req.params.player_username);
-            stmtupdateAfterCast.run(fish_value_multiplied,req.params.player_username)
+            stmtupdateAfterCast.run(fish_value_multiplied,req.params.player_username);
 
             rankInfo = stmtRank.get(req.params.player_username);
         });
@@ -220,26 +249,7 @@ SET
                 above_rank : rankInfo.above_rank
             }
         };
-        var message = `
-Small Worms: ${wormInfo.small_worms}
-Tasty Worms: ${wormInfo.tasty_worms}
-Enchanted Worms: ${wormInfo.enchanted_worms}
-Magic Worms: ${wormInfo.magic_worms}
-Gold : Coming Soon!
-
-You caught ${fishCaught.fish_name}
-Fishing Exp: ${rankInfo.xp} (+1)
-Fish: Coming Soon!
-Your Earnings: ${rankInfo.linden_balance} L$ (+${fishCaught.fish_value}) 
-RANK Extras!: Coming Soon!
-Kingdoms Coming Soon! 
-
-RANK (overall):  ${rankInfo.rank}
-${rankInfo.xp_difference} XP to beat ${rankInfo.above_display_name}  ranked ${rankInfo.above_rank}.
-
-RANK (monthly):  Coming Soon!
-        `;
-        // res.json(generateJSONSkeleton(formatMultilineStringToNormal(message),200));
+        // res.json(generateJSONSkeleton(generateResponseString(fishCaught,wormInfo,rankInfo),200));
         // for debug visualization
         res.json(generateJSONSkeleton(debugObj,200));
     }
