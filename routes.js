@@ -147,7 +147,7 @@ SET
 WHERE rod_uuid = ?;
     `;
     const sqlWormInfo = `
-SELECT small_worms, tasty_worms, enchanted_worms, magic_worms FROM rod_info WHERE rod_uuid = ?;
+SELECT small_worms, tasty_worms, enchanted_worms, magic_worms, selected_worm FROM rod_info WHERE rod_uuid = ?;
     `;
     const sqlForBuoys = `
 UPDATE buoy 
@@ -169,14 +169,6 @@ SET
     WHERE player_username = ?;
     `
     try{
-        const params = {
-            player_username : req.query.player_username,
-            buoy_uuid : req.query.buoy_uuid,
-            rod_uuid : req.query.rod_uuid
-        };
-
-        ensureParametersOrValueNotNull(params);
-
         const stmtFish = db.prepare(sqlForFish);
         const stmtRank = db.prepare(sqlForRank);
         const stmtWorm = db.prepare(sqlForWorms);
@@ -189,20 +181,20 @@ SET
         let fishCaught, wormInfo, rankInfo;
 
         const castTransaction = db.transaction(function(){
-            stmtCastHandling.run(params.buoy_uuid,params.player_username);
-            stmtWorm.run(params.rod_uuid);
+            stmtCastHandling.run(req.params.buoy_uuid,req.params.player_username);
+            stmtWorm.run(req.params.rod_uuid);
         
-            fishCaught = stmtFish.get(params.buoy_uuid);
-            wormInfo = stmtWormInfo.get(params.rod_uuid);
+            fishCaught = stmtFish.get(req.params.buoy_uuid);
+            wormInfo = stmtWormInfo.get(req.params.rod_uuid);
             fish_value_multiplied = fishCaught.fish_value * fishCaught.multiplier;
 
             // if error, buoy empty
-            stmtBuoy.run(fish_value_multiplied, fish_value_multiplied * FISHPOT_RATE, params.buoy_uuid)
+            stmtBuoy.run(fish_value_multiplied, fish_value_multiplied * FISHPOT_RATE, req.params.buoy_uuid)
         
-            stmtForUpdateRank.run(TEMP_XP, params.player_username);
-            stmtupdateAfterCast.run(fish_value_multiplied,params.player_username)
+            stmtForUpdateRank.run(TEMP_XP, req.params.player_username);
+            stmtupdateAfterCast.run(fish_value_multiplied,req.params.player_username)
 
-            rankInfo = stmtRank.get(params.player_username);
+            rankInfo = stmtRank.get(req.params.player_username);
         });
 
         castTransaction();

@@ -5,3 +5,4 @@ fish-hunt.db
 *.db-wal
 .vscode/
 *.sql
+*.html

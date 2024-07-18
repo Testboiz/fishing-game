@@ -122,6 +122,8 @@ const castMiddleware = function castCacheMiddleware(req,res,next){
             rod_uuid : req.query.rod_uuid
         };
         ensureParametersOrValueNotNull(params);
+        req.params = params; // this would simplify the code in the route
+
         const rod_id = params.rod_uuid;
         if ((!buoyCache[rod_id]) || buoyCache[rod_id].currentBuoy !== params.buoy_uuid){
             let loginStatus = buoyLogin(res,params.buoy_uuid,params.rod_uuid,params.player_username);
