@@ -1,32 +1,36 @@
-const express = require('express');
-const middlewares = require('./middlewares');
-const router = express.Router();
-const db = require('better-sqlite3')('./fish-hunt.db');
+/** @format */
 
-db.pragma('journal_mode = WAL');
+const express = require("express");
+const middlewares = require("./middlewares");
+const router = express.Router();
+const db = require("better-sqlite3")("./fish-hunt.db");
+const redis = require("redis");
+
+db.pragma("journal_mode = WAL");
+const client = redis.createClient();
+client.connect().then();
 
 // default handling of error
-function handleDBError(err, res){
+function handleDBError(err, res) {
     jsonOutput = {
-        message : "the database blew up",
-        status : 500,
-        debugMsg : err.message,
-        debugStack : err.stack
+        message: "the database blew up",
+        status: 500,
+        debugMsg: err.message,
+        debugStack: err.stack,
     };
     res.status(jsonOutput["status"]).json(jsonOutput);
 }
 
 // generate standardized structure of json
-function generateJSONSkeleton(objectOrMessage, httpCode){
+function generateJSONSkeleton(objectOrMessage, httpCode) {
     return {
-        message : objectOrMessage,
-        status : httpCode
+        message: objectOrMessage,
+        status: httpCode,
     };
 }
 
-
-function ensureParametersOrValueNotNull(paramObject){
-    if (paramObject === null || paramObject === undefined){
+function ensureParametersOrValueNotNull(paramObject) {
+    if (paramObject === null || paramObject === undefined) {
         throw new Error("The value is null or undefined");
     }
     for (let key in paramObject) {
@@ -37,7 +41,7 @@ function ensureParametersOrValueNotNull(paramObject){
 }
 
 // Helper function to handle the complexity of multiline string handling
-function generateResponseString(fishCaught, wormInfo, rankInfo){
+function generateResponseString(fishCaught, wormInfo, rankInfo) {
     var strArray = [
         `
 Small Worms: ${wormInfo.small_worms}
@@ -59,65 +63,112 @@ Kingdoms Coming Soon!
         `
 Rank (overall):  ${rankInfo.rank}        
         `,
-        (rankInfo.rank === '1') // Note : its string
-        ? `${rankInfo.xp_difference} XP to beat ${rankInfo.above_display_name}  ranked ${rankInfo.above_rank}.`
-        : `You are the top fisher!`,
+        rankInfo.rank === "1" // Note : its string
+            ? `${rankInfo.xp_difference} XP to beat ${rankInfo.above_display_name}  ranked ${rankInfo.above_rank}.`
+            : `You are the top fisher!`,
         `\n`,
-        `Rank (monthly):  Coming Soon!`
-    ]
+        `Rank (monthly):  Coming Soon!`,
+    ];
     return strArray.join("\n");
 }
 
-router.get("/", function(_, res){
+function __setRedisCastCacheCallback(err, reply) {
+    if (err) throw err;
+    console.log(reply);
+}
+
+function setRedisCastCache(buoy_uuid, rod_uuid, worm_type) {
+    // TODO: Implement boosts like Alacrity and shubbie
+    const keyString = buoy_uuid.toString() + rod_uuid.toString();
+    const SMALL_WORMS_TIMEOUT = 75;
+    const TASTY_WORMS_TIMEOUT = 60;
+    const ENCHANTED_WORMS_TIMEOUT = 45;
+    const MAGIC_WORMS_TIMEOUT = 30;
+    switch (worm_type) {
+        case 1:
+            client.setEx(
+                keyString,
+                SMALL_WORMS_TIMEOUT,
+                "Small Worms",
+                __setRedisCastCacheCallback
+            );
+
+            break;
+        case 2:
+            client.setEx(
+                keyString,
+                TASTY_WORMS_TIMEOUT,
+                "Tasty Worms",
+                __setRedisCastCacheCallback
+            );
+            break;
+        case 3:
+            client.setEx(
+                keyString,
+                ENCHANTED_WORMS_TIMEOUT,
+                "Enchanted Worms",
+                __setRedisCastCacheCallback
+            );
+            break;
+        case 4:
+            client.setEx(
+                keyString,
+                MAGIC_WORMS_TIMEOUT,
+                "Magic Worms",
+                __setRedisCastCacheCallback
+            );
+            break;
+    }
+}
+
+router.get("/", function (_, res) {
     res.json(generateJSONSkeleton("Server is up!", 200));
 });
 
-
-router.get("/auth", function(req,res){
-    const query = "SELECT * FROM rod_info WHERE rod_uuid = ? AND player_username = ?";
+router.get("/auth", function (req, res) {
+    const query =
+        "SELECT * FROM rod_info WHERE rod_uuid = ? AND player_username = ?";
     const stmt = db.prepare(query);
 
-    try{
+    try {
         const params = {
-            id : req.query.id,
-            username : req.query.username
+            id: req.query.id,
+            username: req.query.username,
         };
 
         ensureParametersOrValueNotNull(params);
 
         // parameters can be immmediately puy on the function, making the code cleaner
-        const result = stmt.get(params.id,params.username);
-        var jsonOutput = {}
+        const result = stmt.get(params.id, params.username);
+        var jsonOutput = {};
 
-        if (result){
+        if (result) {
             const HTTP_OK = 200;
-            const msg = "Authorization Failed, Rod cannot be transferred to another player";
+            const msg =
+                "Authorization Successful";
             jsonOutput = generateJSONSkeleton(msg, HTTP_OK);
-        }
-        else{
+        } else {
             const HTTP_ERR_FORBIDDEN = 403;
-            const msg = "Authorization Failed, Rod cannot be transferred to another player";
+            const msg =
+                "Authorization Failed, Rod cannot be transferred to another player";
             jsonOutput = generateJSONSkeleton(msg, HTTP_ERR_FORBIDDEN);
         }
         res.status(jsonOutput["status"]).json(jsonOutput);
+    } catch (err) {
+        handleDBError(err, res);
     }
-    catch (err){
-        handleDBError(err,res);
-    }
-
 });
 
-router.get("/fish", function(_, res){
-    try{
+router.get("/fish", function (_, res) {
+    try {
         const rows = db.prepare("SELECT * FROM fish").all();
-        res.json(generateJSONSkeleton(rows,200));
-    }
-    catch (err){
-        handleDBError(err,res);
+        res.json(generateJSONSkeleton(rows, 200));
+    } catch (err) {
+        handleDBError(err, res);
     }
 });
 
-router.put("/cast", middlewares , function(req, res){
+router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, function (req, res) {
     const TEMP_XP = 1;
     const FISHPOT_RATE = 0.01;
     const sqlForFish = `
@@ -186,7 +237,7 @@ UPDATE buoy
     fishpot = fishpot +  ?
 WHERE buoy_uuid = ?;
     `;
-    const sqlForUpdateRank = `UPDATE rank_overall  SET xp = xp + ? WHERE player_username = ?; `
+    const sqlForUpdateRank = `UPDATE rank_overall  SET xp = xp + ? WHERE player_username = ?; `;
     const sqlCastHandling = `
 INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
     ON CONFLICT (buoy_uuid, player_username) DO UPDATE SET casts = casts + 1;
@@ -197,8 +248,8 @@ UPDATE player
 SET 
     linden_balance = linden_balance + ?
     WHERE player_username = ?;
-    `
-    try{
+    `;
+    try {
         const stmtFish = db.prepare(sqlForFish);
         const stmtRank = db.prepare(sqlForRank);
         const stmtWorm = db.prepare(sqlForWorms);
@@ -207,73 +258,84 @@ SET
         const stmtForUpdateRank = db.prepare(sqlForUpdateRank);
         const stmtCastHandling = db.prepare(sqlCastHandling);
         const stmtupdateAfterCast = db.prepare(sqlUpdateAfterCast);
-        
+
         let fishCaught, wormInfo, rankInfo;
 
-        const castTransaction = db.transaction(function(){
-            stmtCastHandling.run(req.params.buoy_uuid,req.params.player_username);
+        const castTransaction = db.transaction(function () {
+            stmtCastHandling.run(req.params.buoy_uuid, req.params.player_username);
             stmtWorm.run(req.params.rod_uuid);
-        
+
             fishCaught = stmtFish.get(req.params.buoy_uuid);
             wormInfo = stmtWormInfo.get(req.params.rod_uuid);
             fish_value_multiplied = fishCaught.fish_value * fishCaught.multiplier;
 
-            stmtBuoy.run(fish_value_multiplied, fish_value_multiplied * FISHPOT_RATE, req.params.buoy_uuid);
-        
+            stmtBuoy.run(
+                fish_value_multiplied,
+                fish_value_multiplied * FISHPOT_RATE,
+                req.params.buoy_uuid
+            );
+
             stmtForUpdateRank.run(TEMP_XP, req.params.player_username);
-            stmtupdateAfterCast.run(fish_value_multiplied,req.params.player_username);
+            stmtupdateAfterCast.run(
+                fish_value_multiplied,
+                req.params.player_username
+            );
 
             rankInfo = stmtRank.get(req.params.player_username);
         });
 
         castTransaction();
+        setRedisCastCache(req.params.buoy_uuid, req.params.rod_uuid, wormInfo.selected_worm);
 
         const debugObj = {
-            worms : {
-                small : wormInfo.small_worms,
-                tasty : wormInfo.tasty_worms,
-                enchanted : wormInfo.enchanted_worms,
-                magic : wormInfo.magic_worms
+            worms: {
+                small: wormInfo.small_worms,
+                tasty: wormInfo.tasty_worms,
+                enchanted: wormInfo.enchanted_worms,
+                magic: wormInfo.magic_worms,
             },
-            fish : fishCaught.fish_name,
-            xp : rankInfo.xp,
-            debugCast : fishCaught.casts,
-            earnings : {
-                linden_balance : rankInfo.linden_balance,
-                fish_value : fish_value_multiplied
+            fish: fishCaught.fish_name,
+            xp: rankInfo.xp,
+            debugCast: fishCaught.casts,
+            earnings: {
+                linden_balance: rankInfo.linden_balance,
+                fish_value: fish_value_multiplied,
             },
-            rank_info : {
-                rank : rankInfo.rank,
-                xp_difference : rankInfo.xp_difference,
-                above_display_name : rankInfo.above_display_name,
-                above_rank : rankInfo.above_rank
-            }
+            rank_info: {
+                rank: rankInfo.rank,
+                xp_difference: rankInfo.xp_difference,
+                above_display_name: rankInfo.above_display_name,
+                above_rank: rankInfo.above_rank,
+            },
         };
         // res.json(generateJSONSkeleton(generateResponseString(fishCaught,wormInfo,rankInfo),200));
         // for debug visualization
-        res.json(generateJSONSkeleton(debugObj,200));
-    }
-    catch(err){
-        if (!res.headersSent){
-            if (err.message.includes("buoy_balance_cant_negative")){
-                const HTTP_ERROR_CONFLICT = 409
+        res.json(generateJSONSkeleton(debugObj, 200));
+    } catch (err) {
+        if (!res.headersSent) {
+            if (err.message.includes("buoy_balance_cant_negative")) {
+                const HTTP_ERROR_CONFLICT = 409;
                 const message = "Oops this place has run out of fishes!";
-                res.status(HTTP_ERROR_CONFLICT).json(generateJSONSkeleton(message,HTTP_ERROR_CONFLICT))
-            }
-            else{
-                handleDBError(err,res);
+                res
+                    .status(HTTP_ERROR_CONFLICT)
+                    .json(generateJSONSkeleton(message, HTTP_ERROR_CONFLICT));
+            } else {
+                handleDBError(err, res);
             }
         }
     }
 });
 
 // other than the already defined routes
-router.all('*', function(_,res){
-    res.status(404)
-        .json(generateJSONSkeleton("You are accessing page that does not exist!",404));
+router.all("*", function (_, res) {
+    res
+        .status(404)
+        .json(
+            generateJSONSkeleton("You are accessing page that does not exist!", 404)
+        );
 });
 
-process.on('SIGINT', () => {
+process.on("SIGINT", () => {
     db.close();
 });
 
