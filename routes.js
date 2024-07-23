@@ -96,6 +96,41 @@ router.get("/", function (_, res) {
     res.json(myUtils.generateJSONSkeleton("Server is up!", 200));
 });
 
+router.post("/rod", middlewares.playerRegisterMiddleware, function (req, res) {
+    const params = {
+        rod_uuid: req.query.rod_uuid,
+        player_username: req.query.player_username
+    };
+    myUtils.ensureParametersOrValueNotNull(params);
+
+    try {
+        const sql = `
+INSERT INTO rod_info 
+(rod_uuid, small_worms, player_username)
+VALUES
+(?,100,?)
+    `;
+        const stmt = db.prepare(sql);
+        stmt.run(params.rod_uuid, params.player_username);
+    }
+    catch (err) {
+        myUtils.handleDBError(err, res);
+    }
+});
+
+router.post("buoy", middlewares.playerRegisterMiddleware, function (req, res) {
+    const buoy_uuid = req.params.buoy_uuid;
+    myUtils.ensureParametersOrValueNotNull(buoy_uuid);
+    try {
+        const sql = `INSERT INTO buoy (buoy_uuid) VALUES (?)`;
+        const stmt = db.prepare(sql);
+        stmt.run(buoy_uuid);
+    }
+    catch (err) {
+        myUtils.handleDBError(err, res);
+    }
+});
+
 router.get("/auth", function (req, res) {
     const query =
         "SELECT * FROM rod_info WHERE rod_uuid = ? AND player_username = ?";
