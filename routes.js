@@ -118,6 +118,38 @@ VALUES
     }
 });
 
+// TODO : eventually scale to different rod tiers
+router.post("/rod/add-worms", function (req, res) {
+    const params = {
+        rod_uuid: req.params.rod_uuid,
+        worm_amnount: req.params.worm_amnount,
+        worm_type: req.params.worm_type
+    };
+    myUtils.ensureParametersOrValueNotNull(params);
+    try {
+        let sql;
+        switch (worm_type.toLowerCase()) {
+            case "small_worms":
+                sql = `UPDATE rod_info SET small_worms = small_worms + ? WHERE rod_uuid = ?`;
+                break;
+            case "tasty_worms":
+                sql = `UPDATE rod_info SET tasty_worms = tasty_worms + ? WHERE rod_uuid = ?`;
+                break;
+            case "enchanted_worms":
+                sql = `UPDATE rod_info SET enchanted_worms = enchanted_worms + ? WHERE rod_uuid = ?`;
+                break;
+            case "magic_worms":
+                sql = `UPDATE rod_info SET magic_worms = magic_worms + ? WHERE rod_uuid = ?`;
+                break;
+        }
+        stmt = db.prepare(sql);
+        stmt.run(params.worm_amnount, params.rod_uuid);
+    }
+    catch (err) {
+        myUtils.handleDBError(err, res);
+    }
+});
+
 router.post("buoy", middlewares.playerRegisterMiddleware, function (req, res) {
     const buoy_uuid = req.params.buoy_uuid;
     myUtils.ensureParametersOrValueNotNull(buoy_uuid);
@@ -132,6 +164,7 @@ router.post("buoy", middlewares.playerRegisterMiddleware, function (req, res) {
 });
 
 // TODO FISHPOT
+// TODO remove the player_display_name in favor of simplier playername handling
 
 router.post("buoy/set-location-name", function (req, res) {
     const params = {
@@ -149,6 +182,7 @@ router.post("buoy/set-location-name", function (req, res) {
     }
 });
 
+// TODO scale to different buoy colors
 router.post("buoy/add-balance", function (req, res) {
     const params = {
         buoy_uuid: req.params.buoy_uuid,
