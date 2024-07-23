@@ -131,6 +131,43 @@ router.post("buoy", middlewares.playerRegisterMiddleware, function (req, res) {
     }
 });
 
+// TODO FISHPOT
+
+router.post("buoy/set-location-name", function (req, res) {
+    const params = {
+        buoy_uuid: req.params.buoy_uuid,
+        location_name: req.params.location_name
+    };
+    myUtils.ensureParametersOrValueNotNull(params);
+    try {
+        const sql = `UPDATE buoy SET buoy_location_name = ? WHERE buoy_uuid = ?`;
+        const stmt = db.prepare(sql);
+        stmt.run(params.location_name);
+    }
+    catch (err) {
+        myUtils.handleDBError(err, res);
+    }
+});
+
+router.post("buoy/add-balance", function (req, res) {
+    const params = {
+        buoy_uuid: req.params.buoy_uuid,
+        linden_amnount: req.params.linden_amnount
+    };
+    myUtils.ensureParametersOrValueNotNull(params);
+    // Flat 15% tax for now
+    const TAX = 0.15;
+    const BALANCE_CUT = 1 - TAX;
+    try {
+        const sql = `UPDATE buoy SET buoy_balance = buoy_balance + ?*? WHERE buoy_uuid = ?`;
+        const stmt = db.prepare(sql);
+        stmt.run(params.linden_amnount, BALANCE_CUT, params.buoy_uuid);
+    }
+    catch (err) {
+        myUtils.handleDBError; (err, res);
+    }
+});
+
 router.get("/auth", function (req, res) {
     const query =
         "SELECT * FROM rod_info WHERE rod_uuid = ? AND player_username = ?";
