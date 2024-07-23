@@ -130,15 +130,6 @@ router.get("/auth", function (req, res) {
     }
 });
 
-router.get("/fish", function (_, res) {
-    try {
-        const rows = db.prepare("SELECT * FROM fish").all();
-        res.json(myUtils.generateJSONSkeleton(rows, 200));
-    } catch (err) {
-        myUtils.handleDBError(err, res);
-    }
-});
-
 router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, function (req, res) {
     const TEMP_XP = 1;
     const FISHPOT_RATE = 0.01;
