@@ -1,44 +1,15 @@
 /** @format */
 
+const db = require("better-sqlite3")("./fish-hunt.db");
 const express = require("express");
 const middlewares = require("./middlewares");
-const router = express.Router();
-const db = require("better-sqlite3")("./fish-hunt.db");
 const redis = require("redis");
+const router = express.Router();
+const myUtils = require("./utils");
 
 db.pragma("journal_mode = WAL");
 const client = redis.createClient();
 client.connect().then();
-
-// default handling of error
-function handleDBError(err, res) {
-    jsonOutput = {
-        message: "the database blew up",
-        status: 500,
-        debugMsg: err.message,
-        debugStack: err.stack,
-    };
-    res.status(jsonOutput["status"]).json(jsonOutput);
-}
-
-// generate standardized structure of json
-function generateJSONSkeleton(objectOrMessage, httpCode) {
-    return {
-        message: objectOrMessage,
-        status: httpCode,
-    };
-}
-
-function ensureParametersOrValueNotNull(paramObject) {
-    if (paramObject === null || paramObject === undefined) {
-        throw new Error("The value is null or undefined");
-    }
-    for (let key in paramObject) {
-        if (paramObject[key] === null || paramObject[key] === undefined) {
-            throw new Error("One of the params are null or undefined");
-        }
-    }
-}
 
 // Helper function to handle the complexity of multiline string handling
 function generateResponseString(fishCaught, wormInfo, rankInfo) {
@@ -122,7 +93,7 @@ function setRedisCastCache(buoy_uuid, rod_uuid, worm_type) {
 }
 
 router.get("/", function (_, res) {
-    res.json(generateJSONSkeleton("Server is up!", 200));
+    res.json(myUtils.generateJSONSkeleton("Server is up!", 200));
 });
 
 router.get("/auth", function (req, res) {
@@ -136,7 +107,7 @@ router.get("/auth", function (req, res) {
             username: req.query.username,
         };
 
-        ensureParametersOrValueNotNull(params);
+        myUtils.ensureParametersOrValueNotNull(params);
 
         // parameters can be immmediately puy on the function, making the code cleaner
         const result = stmt.get(params.id, params.username);
@@ -146,25 +117,25 @@ router.get("/auth", function (req, res) {
             const HTTP_OK = 200;
             const msg =
                 "Authorization Successful";
-            jsonOutput = generateJSONSkeleton(msg, HTTP_OK);
+            jsonOutput = myUtils.generateJSONSkeleton(msg, HTTP_OK);
         } else {
             const HTTP_ERR_FORBIDDEN = 403;
             const msg =
                 "Authorization Failed, Rod cannot be transferred to another player";
-            jsonOutput = generateJSONSkeleton(msg, HTTP_ERR_FORBIDDEN);
+            jsonOutput = myUtils.generateJSONSkeleton(msg, HTTP_ERR_FORBIDDEN);
         }
         res.status(jsonOutput["status"]).json(jsonOutput);
     } catch (err) {
-        handleDBError(err, res);
+        myUtils.handleDBError(err, res);
     }
 });
 
 router.get("/fish", function (_, res) {
     try {
         const rows = db.prepare("SELECT * FROM fish").all();
-        res.json(generateJSONSkeleton(rows, 200));
+        res.json(myUtils.generateJSONSkeleton(rows, 200));
     } catch (err) {
-        handleDBError(err, res);
+        myUtils.handleDBError(err, res);
     }
 });
 
@@ -308,9 +279,9 @@ SET
                 above_rank: rankInfo.above_rank,
             },
         };
-        // res.json(generateJSONSkeleton(generateResponseString(fishCaught,wormInfo,rankInfo),200));
+        // res.json(myUtils.generateJSONSkeleton(generateResponseString(fishCaught,wormInfo,rankInfo),200));
         // for debug visualization
-        res.json(generateJSONSkeleton(debugObj, 200));
+        res.json(myUtils.generateJSONSkeleton(debugObj, 200));
     } catch (err) {
         if (!res.headersSent) {
             if (err.message.includes("buoy_balance_cant_negative")) {
@@ -318,9 +289,9 @@ SET
                 const message = "Oops this place has run out of fishes!";
                 res
                     .status(HTTP_ERROR_CONFLICT)
-                    .json(generateJSONSkeleton(message, HTTP_ERROR_CONFLICT));
+                    .json(myUtils.generateJSONSkeleton(message, HTTP_ERROR_CONFLICT));
             } else {
-                handleDBError(err, res);
+                myUtils.handleDBError(err, res);
             }
         }
     }
@@ -331,7 +302,7 @@ router.all("*", function (_, res) {
     res
         .status(404)
         .json(
-            generateJSONSkeleton("You are accessing page that does not exist!", 404)
+            myUtils.generateJSONSkeleton("You are accessing page that does not exist!", 404)
         );
 });
 

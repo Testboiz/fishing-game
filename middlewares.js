@@ -2,41 +2,13 @@
 
 const db = require("better-sqlite3")("./fish-hunt.db");
 const redis = require("redis");
+const myUtils = require("./utils");
+
 const buoyCache = {};
 const middleware = {};
 
 const client = redis.createClient();
 client.connect().then();
-
-
-// Note : These 3 functions below violates DRY
-function handleDBError(err, res) {
-    jsonOutput = {
-        message: "the database blew up",
-        status: 500,
-        debugMsg: err.message,
-        debugStack: err.stack,
-    };
-    res.status(jsonOutput["status"]).json(jsonOutput);
-}
-
-function generateJSONSkeleton(objectOrMessage, httpCode) {
-    return {
-        message: objectOrMessage,
-        status: httpCode,
-    };
-}
-
-function ensureParametersOrValueNotNull(paramObject) {
-    if (paramObject === null || paramObject === undefined) {
-        throw new Error("The value is null or undefined");
-    }
-    for (let key in paramObject) {
-        if (paramObject[key] === null || paramObject[key] === undefined) {
-            throw new Error("One of the params are null or undefined");
-        }
-    }
-}
 
 function sqlToJsDateUTC(sqlDate) {
     // Split the SQL datetime string into an array
@@ -65,7 +37,7 @@ WHERE buoy_uuid = ? AND player_username = ?;`;
         const rows = stmt.get(buoy_uuid, player_username);
         return rows;
     } catch (err) {
-        handleDBError(err, res);
+        myUtils.handleDBError(err, res);
     }
 }
 
@@ -81,7 +53,7 @@ function getRemainingTime(spookDate) {
 function buoyLogin(res, buoy_uuid, rod_uuid, player_username) {
     try {
         const query = "UPDATE rod_info SET buoy_fished = ? WHERE rod_uuid = ? ";
-        ensureParametersOrValueNotNull(buoy_uuid);
+        myUtils.ensureParametersOrValueNotNull(buoy_uuid);
         const stmt = db.prepare(query);
         stmt.run(buoy_uuid, rod_uuid);
         if (checkSpook(res, buoy_uuid, player_username)) {
@@ -115,7 +87,7 @@ function checkSpook(res, buoy_uuid, player_username) {
             var msg = `Oops, You have Spooked this buoy, you can come back in ${remainingTime}`;
             res
                 .status(HTTP_TOO_MANY_REQUESTS)
-                .json(generateJSONSkeleton(msg, HTTP_TOO_MANY_REQUESTS));
+                .json(myUtils.generateJSONSkeleton(msg, HTTP_TOO_MANY_REQUESTS));
             return false; // fail
         }
         return true; // success
@@ -131,7 +103,7 @@ middleware.castMiddleware = function castCacheMiddleware(req, res, next) {
             buoy_uuid: req.query.buoy_uuid,
             rod_uuid: req.query.rod_uuid,
         };
-        ensureParametersOrValueNotNull(params);
+        myUtils.ensureParametersOrValueNotNull(params);
         req.params = params; // this would simplify the code in the route
 
         const rod_id = params.rod_uuid;
@@ -180,7 +152,7 @@ middleware.castMiddleware = function castCacheMiddleware(req, res, next) {
             }
         }
     } catch (err) {
-        handleDBError(err, res);
+        myUtils.handleDBError(err, res);
     }
 };
 
@@ -193,14 +165,14 @@ middleware.timeoutMiddleware = async function timeoutMiddleware(req, res, next) 
         const msg = `Wait a moment, your fishing rod is not ready yet`;
         if (value) {
             res.status(HTTP_TOO_MANY_REQUESTS).json(
-                generateJSONSkeleton(msg, HTTP_TOO_MANY_REQUESTS)
+                myUtils.generateJSONSkeleton(msg, HTTP_TOO_MANY_REQUESTS)
             );
         }
         else {
             next();
         }
     } catch (err) {
-        handleDBError(err, res);
+        myUtils.handleDBError(err, res);
     }
 };
 module.exports = middleware;
