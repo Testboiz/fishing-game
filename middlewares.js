@@ -96,27 +96,34 @@ function checkSpook(res, buoy_uuid, player_username) {
     }
 }
 
-middleware.playerRegisterMiddleware = function registerPlayerMiddleware(req, res, rext) {
-    const params = {
-        player_username: req.query.player_username,
-        player_display_name: req.query.player_display_name
-    };
-    myUtils.ensureParametersOrValueNotNull(params);
-    const sql = `SELECT player_username FROM players WHERE player_username = ?`;
-    const stmt = db.prepare(sql);
-    const rows = stmt.get(params.player_username);
+middleware.playerRegisterMiddleware = function registerPlayerMiddleware(req, res, next) {
+    try {
+        const params = {
+            player_username: req.query.player_username,
+            player_display_name: req.query.player_display_name
+        };
+        myUtils.ensureParametersOrValueNotNull(params);
+        const sql = `SELECT player_username FROM player WHERE player_username = ?`;
+        const stmt = db.prepare(sql);
+        const rows = stmt.get(params.player_username);
 
-    if (rows) {
-        next();
+        if (rows) {
+            console.log("hi");
+            next();
+        }
+        else {
+            console.log("hi2");
+            const sqlInsert = `
+    INSERT INTO player
+    (player_username, player_display_name, linden_balance) 
+    VALUES (?,?,0)`;
+            const stmtInsert = db.prepare(sqlInsert);
+            stmtInsert.run(params.player_username, params.player_display_name);
+            next();
+        }
     }
-    else {
-        const sqlInsert = `
-INSERT INTO players 
-(player_username, player_display_name, linden_balance) 
-VALUES (?,?,0)`;
-        const stmtInsert = db.prepare(sqlInsert);
-        stmtInsert.run(params.player_username, params.player_display_name);
-        next();
+    catch (err) {
+        myUtils.handleDBError(err, res);
     }
 };
 

@@ -99,10 +99,13 @@ router.get("/", function (_, res) {
 router.post("/rod", middlewares.playerRegisterMiddleware, function (req, res) {
     const params = {
         rod_uuid: req.query.rod_uuid,
-        player_username: req.query.player_username
+        player_username: req.query.player_username,
+        player_display_name: req.query.player_display_name
     };
     myUtils.ensureParametersOrValueNotNull(params);
-
+    const HTTP_OK = 200;
+    const msg = "Player and rod registered with free 100 Small Worms";
+    const responseJSON = myUtils.generateJSONSkeleton(msg, HTTP_OK);
     try {
         const sql = `
 INSERT INTO rod_info 
@@ -112,8 +115,10 @@ VALUES
     `;
         const stmt = db.prepare(sql);
         stmt.run(params.rod_uuid, params.player_username);
+        res.json(responseJSON);
     }
     catch (err) {
+        // TODO : handle unique constraint fail aka this gets executed somehow
         myUtils.handleDBError(err, res);
     }
 });
@@ -121,14 +126,16 @@ VALUES
 // TODO : eventually scale to different rod tiers
 router.post("/rod/add-worms", function (req, res) {
     const params = {
-        rod_uuid: req.params.rod_uuid,
-        worm_amnount: req.params.worm_amnount,
-        worm_type: req.params.worm_type
+        rod_uuid: req.query.rod_uuid,
+        worm_amnount: req.query.worm_amnount,
+        worm_type: req.query.worm_type
     };
-    myUtils.ensureParametersOrValueNotNull(params);
     try {
+        //TODO worm_switch_up trigger doesnt really run executions from here
+        myUtils.ensureParametersOrValueNotNull(params);
+        const HTTP_OK = 200;
         let sql;
-        switch (worm_type.toLowerCase()) {
+        switch (params.worm_type.toLowerCase()) {
             case "small_worms":
                 sql = `UPDATE rod_info SET small_worms = small_worms + ? WHERE rod_uuid = ?`;
                 break;
@@ -144,15 +151,23 @@ router.post("/rod/add-worms", function (req, res) {
         }
         stmt = db.prepare(sql);
         stmt.run(params.worm_amnount, params.rod_uuid);
+        let msg = `You have bought ${params.worm_amnount} ${params.worm_type.replace("_", " ")} `;
+        const responseJSON = myUtils.generateJSONSkeleton(msg, HTTP_OK);
+        res.json(responseJSON);
     }
     catch (err) {
         myUtils.handleDBError(err, res);
     }
 });
 
+// TODO add res.json()
 router.post("buoy", middlewares.playerRegisterMiddleware, function (req, res) {
-    const buoy_uuid = req.params.buoy_uuid;
-    myUtils.ensureParametersOrValueNotNull(buoy_uuid);
+    // const buoy_uuid = req.params.buoy_uuid;
+    const params = {
+        buoy_uuid: req.query.buoy_uuid,
+        player_display_name: req.query.player_display_name
+    };
+    myUtils.ensureParametersOrValueNotNull(params);
     try {
         const sql = `INSERT INTO buoy (buoy_uuid) VALUES (?)`;
         const stmt = db.prepare(sql);
