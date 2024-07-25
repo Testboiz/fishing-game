@@ -1,7 +1,8 @@
 const constants = {
     HTTP: {
         OK: 200,
-        FORBIDDEN: 400,
+        BAD_REQUEST: 400,
+        FORBIDDEN: 403, // oops it should be bad request
         NOT_FOUND: 404,
         CONFLICT: 409,
         TOO_MANY_REQUESTS: 429,

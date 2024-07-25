@@ -115,8 +115,15 @@ VALUES
         res.json(responseJSON);
     }
     catch (err) {
-        // TODO : handle unique constraint fail aka this gets executed somehow
-        myUtils.handleDBError(err, res);
+        if (err.message.includes("UNIQUE constraint failed")) {
+            const errText = "Rod is already registered";
+            const errMessage = myUtils.generateJSONSkeleton(errText, CONSTANTS.HTTP.CONFLICT);
+            res.status(CONSTANTS.HTTP.CONFLICT).json(errMessage);
+        }
+        else {
+            myUtils.handleDBError(err, res);
+        }
+
     }
 });
 
@@ -124,11 +131,10 @@ VALUES
 router.post("/rod/add-worms", function (req, res) {
     const params = {
         rod_uuid: req.query.rod_uuid,
-        worm_amnount: req.query.worm_amnount,
+        worm_amnount: Number(req.query.worm_amnount), // this has to be number to be able to increment and decrement
         worm_type: req.query.worm_type
     };
     try {
-        //TODO worm_switch_up trigger doesnt really run executions from here
         myUtils.ensureParametersOrValueNotNull(params);
         let sql;
         switch (params.worm_type.toLowerCase()) {
@@ -156,9 +162,7 @@ router.post("/rod/add-worms", function (req, res) {
     }
 });
 
-// TODO add res.json()
 router.post("/buoy", middlewares.playerRegisterMiddleware, function (req, res) {
-    // const buoy_uuid = req.params.buoy_uuid;
     const params = {
         buoy_uuid: req.query.buoy_uuid,
         player_username: req.query.player_username,
@@ -173,11 +177,16 @@ router.post("/buoy", middlewares.playerRegisterMiddleware, function (req, res) {
         res.json(myUtils.generateJSONSkeleton(msg));
     }
     catch (err) {
-        myUtils.handleDBError(err, res);
+        console.log(typeof err.message);
+        if (err.message.includes("UNIQUE constraint failed")) {
+            const errText = "Buoy is already registered";
+            const errMessage = myUtils.generateJSONSkeleton(errText, CONSTANTS.HTTP.CONFLICT);
+            res.status(CONSTANTS.HTTP.CONFLICT).json(errMessage);
+        } else {
+            myUtils.handleDBError(err, res);
+        }
     }
 });
-
-// TODO FISHPOT
 
 router.post("/buoy/set-location-name", function (req, res) {
     const params = {

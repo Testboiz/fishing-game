@@ -107,7 +107,15 @@ middleware.playerRegisterMiddleware = function registerPlayerMiddleware(req, res
         const rows = stmt.get(params.player_username);
 
         if (rows) {
-            next();
+            if (rows.player_display_name === params.player_display_name) {
+                next();
+            }
+            else {
+                const sqlUpdate = `UPDATE player SET player_display_name = ? WHERE player_username = ?`;
+                const stmtUpdate = db.prepare(sqlUpdate);
+                stmtUpdate.run(params.player_display_name, params.player_username);
+                next();
+            }
         }
         else {
             // TODO: handle changes on display name 
@@ -125,6 +133,7 @@ middleware.playerRegisterMiddleware = function registerPlayerMiddleware(req, res
     }
 };
 
+// TODO implement with redis
 middleware.castMiddleware = function castCacheMiddleware(req, res, next) {
     try {
         const params = {
@@ -201,5 +210,10 @@ middleware.timeoutMiddleware = async function timeoutMiddleware(req, res, next) 
     } catch (err) {
         myUtils.handleDBError(err, res);
     }
+};
+
+// TODO FISHPOT
+middleware.fishpotMiddleware = function fishpotMiddleware(req, res, next) {
+    next();
 };
 module.exports = middleware;

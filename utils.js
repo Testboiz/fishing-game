@@ -22,13 +22,13 @@ utils.generateJSONSkeleton = function generateJSONSkeleton(objectOrMessage, http
 };
 
 utils.ensureParametersOrValueNotNull = function ensureParametersOrValueNotNull(paramObject) {
-    console.log(paramObject);
+    // TODO handle this error and use 409 conflict error on try catch
     if (paramObject === null || paramObject === undefined) {
-        throw new Error("The value is null or undefined");
+        throw new Error("Null or undefined parameter value(s)");
     }
     for (let key in paramObject) {
         if (paramObject[key] === null || paramObject[key] === undefined) {
-            throw new Error("One of the params are null or undefined");
+            throw new Error("Null or undefined parameter value(s)");
         }
     }
 };
