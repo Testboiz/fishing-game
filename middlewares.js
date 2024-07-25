@@ -4,6 +4,8 @@ const db = require("better-sqlite3")("./fish-hunt.db");
 const redis = require("redis");
 const myUtils = require("./utils");
 
+const CONSTANTS = require("./constants");
+
 const buoyCache = {};
 const middleware = {};
 
@@ -68,26 +70,23 @@ function buoyLogin(res, buoy_uuid, rod_uuid, player_username) {
 
 function checkSpook(res, buoy_uuid, player_username) {
     try {
-        const HTTP_TOO_MANY_REQUESTS = 429;
-        const MILISECONDS_IN_DAY = 24 * 60 * 60 * 1000;
-
         const rows = getCastsAndSpookTime(res, buoy_uuid, player_username);
         const dateSql = sqlToJsDateUTC(rows.previous_spook_time);
         const timeDifference = getRemainingTime(dateSql);
 
         const date_hh_mm_ss = new Date(null);
         date_hh_mm_ss.setTime(timeDifference);
-        const remainingTime = date_hh_mm_ss.toISOString().slice(11, 19);
+        const remainingTime = date_hh_mm_ss.toISOString().slice(11, 19); // remaining time in hh:mm:ss
 
         if (
             rows.casts === 0 &&
-            timeDifference <= MILISECONDS_IN_DAY &&
+            timeDifference <= CONSTANTS.MILISECONDS_IN_DAY &&
             timeDifference >= 0
         ) {
             var msg = `Oops, You have Spooked this buoy, you can come back in ${remainingTime}`;
             res
-                .status(HTTP_TOO_MANY_REQUESTS)
-                .json(myUtils.generateJSONSkeleton(msg, HTTP_TOO_MANY_REQUESTS));
+                .status()
+                .json(myUtils.generateJSONSkeleton(msg, CONSTANTS.HTTP.TOO_MANY_REQUESTS));
             return false; // fail
         }
         return true; // success
@@ -108,11 +107,9 @@ middleware.playerRegisterMiddleware = function registerPlayerMiddleware(req, res
         const rows = stmt.get(params.player_username);
 
         if (rows) {
-            console.log("hi");
             next();
         }
         else {
-            console.log("hi2");
             const sqlInsert = `
     INSERT INTO player
     (player_username, player_display_name, linden_balance) 
@@ -163,8 +160,7 @@ middleware.castMiddleware = function castCacheMiddleware(req, res, next) {
                 next();
             }
         } else {
-            const CAST_LIMIT = 51;
-            if (buoyCache[rod_id].casts === CAST_LIMIT) {
+            if (buoyCache[rod_id].casts === CONSTANTS.CAST_LIMIT) {
                 let status = checkSpook(res, params.buoy_uuid, params.player_username);
                 if (status === true) {
                     // reset cast
@@ -189,14 +185,13 @@ middleware.castMiddleware = function castCacheMiddleware(req, res, next) {
 
 middleware.timeoutMiddleware = async function timeoutMiddleware(req, res, next) {
     const key = req.query.buoy_uuid.toString() + req.query.rod_uuid.toString();
-    const HTTP_TOO_MANY_REQUESTS = 429;
 
     try {
         const value = await client.get(key);
         const msg = `Wait a moment, your fishing rod is not ready yet`;
         if (value) {
-            res.status(HTTP_TOO_MANY_REQUESTS).json(
-                myUtils.generateJSONSkeleton(msg, HTTP_TOO_MANY_REQUESTS)
+            res.status(CONSTANTS.HTTP.TOO_MANY_REQUESTS).json(
+                myUtils.generateJSONSkeleton(msg, CONSTANTS.HTTP.TOO_MANY_REQUESTS)
             );
         }
         else {
