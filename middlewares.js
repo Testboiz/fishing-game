@@ -110,6 +110,7 @@ middleware.playerRegisterMiddleware = function registerPlayerMiddleware(req, res
             next();
         }
         else {
+            // TODO: handle changes on display name 
             const sqlInsert = `
     INSERT INTO player
     (player_username, player_display_name, linden_balance) 

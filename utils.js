@@ -1,3 +1,4 @@
+const { c } = require("docker/src/languages");
 const CONSTANTS = require("./constants");
 const utils = {};
 
@@ -13,7 +14,7 @@ utils.handleDBError = function handleDBError(err, res) {
 };
 
 // generate standardized structure of json
-utils.generateJSONSkeleton = function generateJSONSkeleton(objectOrMessage, httpCode) {
+utils.generateJSONSkeleton = function generateJSONSkeleton(objectOrMessage, httpCode = CONSTANTS.HTTP.OK) {
     return {
         message: objectOrMessage,
         status: httpCode,
@@ -21,6 +22,7 @@ utils.generateJSONSkeleton = function generateJSONSkeleton(objectOrMessage, http
 };
 
 utils.ensureParametersOrValueNotNull = function ensureParametersOrValueNotNull(paramObject) {
+    console.log(paramObject);
     if (paramObject === null || paramObject === undefined) {
         throw new Error("The value is null or undefined");
     }

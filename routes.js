@@ -102,7 +102,7 @@ router.post("/rod", middlewares.playerRegisterMiddleware, function (req, res) {
     };
     myUtils.ensureParametersOrValueNotNull(params);
     const msg = "Player and rod registered with free 100 Small Worms";
-    const responseJSON = myUtils.generateJSONSkeleton(msg, CONSTANTS.HTTP.OK);
+    const responseJSON = myUtils.generateJSONSkeleton(msg);
     try {
         const sql = `
 INSERT INTO rod_info 
@@ -148,7 +148,7 @@ router.post("/rod/add-worms", function (req, res) {
         stmt = db.prepare(sql);
         stmt.run(params.worm_amnount, params.rod_uuid);
         let msg = `You have bought ${params.worm_amnount} ${params.worm_type.replace("_", " ")} `;
-        const responseJSON = myUtils.generateJSONSkeleton(msg, CONSTANTS.HTTP.OK);
+        const responseJSON = myUtils.generateJSONSkeleton(msg);
         res.json(responseJSON);
     }
     catch (err) {
@@ -157,17 +157,20 @@ router.post("/rod/add-worms", function (req, res) {
 });
 
 // TODO add res.json()
-router.post("buoy", middlewares.playerRegisterMiddleware, function (req, res) {
+router.post("/buoy", middlewares.playerRegisterMiddleware, function (req, res) {
     // const buoy_uuid = req.params.buoy_uuid;
     const params = {
         buoy_uuid: req.query.buoy_uuid,
+        player_username: req.query.player_username,
         player_display_name: req.query.player_display_name
     };
-    myUtils.ensureParametersOrValueNotNull(params);
+    const msg = "Buoy has been registered!";
     try {
+        myUtils.ensureParametersOrValueNotNull(params);
         const sql = `INSERT INTO buoy (buoy_uuid) VALUES (?)`;
         const stmt = db.prepare(sql);
-        stmt.run(buoy_uuid);
+        stmt.run(params.buoy_uuid);
+        res.json(myUtils.generateJSONSkeleton(msg));
     }
     catch (err) {
         myUtils.handleDBError(err, res);
@@ -175,18 +178,19 @@ router.post("buoy", middlewares.playerRegisterMiddleware, function (req, res) {
 });
 
 // TODO FISHPOT
-// TODO remove the player_display_name in favor of simplier playername handling
 
-router.post("buoy/set-location-name", function (req, res) {
+router.post("/buoy/set-location-name", function (req, res) {
     const params = {
-        buoy_uuid: req.params.buoy_uuid,
-        location_name: req.params.location_name
+        buoy_uuid: req.query.buoy_uuid,
+        location_name: req.query.location_name
     };
-    myUtils.ensureParametersOrValueNotNull(params);
+    const msg = "Buoy location set";
     try {
+        myUtils.ensureParametersOrValueNotNull(params);
         const sql = `UPDATE buoy SET buoy_location_name = ? WHERE buoy_uuid = ?`;
         const stmt = db.prepare(sql);
-        stmt.run(params.location_name);
+        stmt.run(params.location_name, params.buoy_uuid);
+        res.json(myUtils.generateJSONSkeleton(msg));
     }
     catch (err) {
         myUtils.handleDBError(err, res);
@@ -194,33 +198,35 @@ router.post("buoy/set-location-name", function (req, res) {
 });
 
 // TODO scale to different buoy colors
-router.post("buoy/add-balance", function (req, res) {
+router.post("/buoy/add-balance", function (req, res) {
     const params = {
-        buoy_uuid: req.params.buoy_uuid,
-        linden_amnount: req.params.linden_amnount
+        buoy_uuid: req.query.buoy_uuid,
+        linden_amnount: Number(req.query.linden_amnount) // this has to be number
     };
-    myUtils.ensureParametersOrValueNotNull(params);
+    const msg = `Buoy balance added by ${params.linden_amnount * CONSTANTS.BALANCE_CUT} L$ (15% Tax Applied)`;
     try {
+        myUtils.ensureParametersOrValueNotNull(params);
         const sql = `UPDATE buoy SET buoy_balance = buoy_balance + ?*? WHERE buoy_uuid = ?`;
         const stmt = db.prepare(sql);
+        console.log(CONSTANTS.BALANCE_CUT);
         stmt.run(params.linden_amnount, CONSTANTS.BALANCE_CUT, params.buoy_uuid);
+        res.json(myUtils.generateJSONSkeleton(msg));
     }
     catch (err) {
-        myUtils.handleDBError; (err, res);
+        myUtils.handleDBError(err, res);
     }
 });
 
 router.get("/auth", function (req, res) {
     const query =
         "SELECT * FROM rod_info WHERE rod_uuid = ? AND player_username = ?";
-    const stmt = db.prepare(query);
+    const params = {
+        id: req.query.id,
+        username: req.query.username,
+    };
 
     try {
-        const params = {
-            id: req.query.id,
-            username: req.query.username,
-        };
-
+        const stmt = db.prepare(query);
         myUtils.ensureParametersOrValueNotNull(params);
 
         // parameters can be immmediately puy on the function, making the code cleaner
@@ -230,7 +236,7 @@ router.get("/auth", function (req, res) {
         if (result) {
             const msg =
                 "Authorization Successful";
-            jsonOutput = myUtils.generateJSONSkeleton(msg, CONSTANTS.HTTP.OK);
+            jsonOutput = myUtils.generateJSONSkeleton(msg);
         } else {
             const msg =
                 "Authorization Failed, Rod cannot be transferred to another player";

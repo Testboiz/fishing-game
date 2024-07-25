@@ -13,7 +13,7 @@ const constants = {
         ENCHANTED_WORMS: 45,
         MAGIC_WORMS: 30
     },
-    BALANCE_CUT: 1 - this.TAX,
+    BALANCE_CUT: 0.85,
     CAST_LIMIT: 51,
     FISPOT_RATE: 0.01,
     MILISECONDS_IN_DAY: 24 * 60 * 60 * 1000,
