@@ -7,6 +7,8 @@ const redis = require("redis");
 const router = express.Router();
 const myUtils = require("./utils");
 
+const CONSTANTS = require("./constants");
+
 db.pragma("journal_mode = WAL");
 const client = redis.createClient();
 client.connect().then();
@@ -51,15 +53,11 @@ function __setRedisCastCacheCallback(err, reply) {
 function setRedisCastCache(buoy_uuid, rod_uuid, worm_type) {
     // TODO: Implement boosts like Alacrity and shubbie
     const keyString = buoy_uuid.toString() + rod_uuid.toString();
-    const SMALL_WORMS_TIMEOUT = 75;
-    const TASTY_WORMS_TIMEOUT = 60;
-    const ENCHANTED_WORMS_TIMEOUT = 45;
-    const MAGIC_WORMS_TIMEOUT = 30;
     switch (worm_type) {
         case 1:
             client.setEx(
                 keyString,
-                SMALL_WORMS_TIMEOUT,
+                CONSTANTS.TIMEOUT.SMALL_WORMS,
                 "Small Worms",
                 __setRedisCastCacheCallback
             );
@@ -68,7 +66,7 @@ function setRedisCastCache(buoy_uuid, rod_uuid, worm_type) {
         case 2:
             client.setEx(
                 keyString,
-                TASTY_WORMS_TIMEOUT,
+                CONSTANTS.TIMEOUT.TASTY_WORMS,
                 "Tasty Worms",
                 __setRedisCastCacheCallback
             );
@@ -76,7 +74,7 @@ function setRedisCastCache(buoy_uuid, rod_uuid, worm_type) {
         case 3:
             client.setEx(
                 keyString,
-                ENCHANTED_WORMS_TIMEOUT,
+                CONSTANTS.TIMEOUT.ENCHANTED_WORMS,
                 "Enchanted Worms",
                 __setRedisCastCacheCallback
             );
@@ -84,7 +82,7 @@ function setRedisCastCache(buoy_uuid, rod_uuid, worm_type) {
         case 4:
             client.setEx(
                 keyString,
-                MAGIC_WORMS_TIMEOUT,
+                CONSTANTS.TIMEOUT.MAGIC_WORMS,
                 "Magic Worms",
                 __setRedisCastCacheCallback
             );
@@ -103,9 +101,8 @@ router.post("/rod", middlewares.playerRegisterMiddleware, function (req, res) {
         player_display_name: req.query.player_display_name
     };
     myUtils.ensureParametersOrValueNotNull(params);
-    const HTTP_OK = 200;
     const msg = "Player and rod registered with free 100 Small Worms";
-    const responseJSON = myUtils.generateJSONSkeleton(msg, HTTP_OK);
+    const responseJSON = myUtils.generateJSONSkeleton(msg, CONSTANTS.HTTP.OK);
     try {
         const sql = `
 INSERT INTO rod_info 
@@ -133,7 +130,6 @@ router.post("/rod/add-worms", function (req, res) {
     try {
         //TODO worm_switch_up trigger doesnt really run executions from here
         myUtils.ensureParametersOrValueNotNull(params);
-        const HTTP_OK = 200;
         let sql;
         switch (params.worm_type.toLowerCase()) {
             case "small_worms":
@@ -152,7 +148,7 @@ router.post("/rod/add-worms", function (req, res) {
         stmt = db.prepare(sql);
         stmt.run(params.worm_amnount, params.rod_uuid);
         let msg = `You have bought ${params.worm_amnount} ${params.worm_type.replace("_", " ")} `;
-        const responseJSON = myUtils.generateJSONSkeleton(msg, HTTP_OK);
+        const responseJSON = myUtils.generateJSONSkeleton(msg, CONSTANTS.HTTP.OK);
         res.json(responseJSON);
     }
     catch (err) {
@@ -204,13 +200,10 @@ router.post("buoy/add-balance", function (req, res) {
         linden_amnount: req.params.linden_amnount
     };
     myUtils.ensureParametersOrValueNotNull(params);
-    // Flat 15% tax for now
-    const TAX = 0.15;
-    const BALANCE_CUT = 1 - TAX;
     try {
         const sql = `UPDATE buoy SET buoy_balance = buoy_balance + ?*? WHERE buoy_uuid = ?`;
         const stmt = db.prepare(sql);
-        stmt.run(params.linden_amnount, BALANCE_CUT, params.buoy_uuid);
+        stmt.run(params.linden_amnount, CONSTANTS.BALANCE_CUT, params.buoy_uuid);
     }
     catch (err) {
         myUtils.handleDBError; (err, res);
@@ -235,15 +228,13 @@ router.get("/auth", function (req, res) {
         var jsonOutput = {};
 
         if (result) {
-            const HTTP_OK = 200;
             const msg =
                 "Authorization Successful";
-            jsonOutput = myUtils.generateJSONSkeleton(msg, HTTP_OK);
+            jsonOutput = myUtils.generateJSONSkeleton(msg, CONSTANTS.HTTP.OK);
         } else {
-            const HTTP_ERR_FORBIDDEN = 403;
             const msg =
                 "Authorization Failed, Rod cannot be transferred to another player";
-            jsonOutput = myUtils.generateJSONSkeleton(msg, HTTP_ERR_FORBIDDEN);
+            jsonOutput = myUtils.generateJSONSkeleton(msg, CONSTANTS.HTTP.FORBIDDEN);
         }
         res.status(jsonOutput["status"]).json(jsonOutput);
     } catch (err) {
@@ -252,8 +243,6 @@ router.get("/auth", function (req, res) {
 });
 
 router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, function (req, res) {
-    const TEMP_XP = 1;
-    const FISHPOT_RATE = 0.01;
     const sqlForFish = `
 WITH probability AS (
     SELECT ABS(RANDOM() / CAST(-9223372036854775808 AS REAL)) AS probability
@@ -354,11 +343,11 @@ SET
 
             stmtBuoy.run(
                 fish_value_multiplied,
-                fish_value_multiplied * FISHPOT_RATE,
+                fish_value_multiplied * CONSTANTS.FISHPOT_RATE,
                 req.params.buoy_uuid
             );
 
-            stmtForUpdateRank.run(TEMP_XP, req.params.player_username);
+            stmtForUpdateRank.run(CONSTANTS.TEMP_XP, req.params.player_username);
             stmtupdateAfterCast.run(
                 fish_value_multiplied,
                 req.params.player_username
@@ -397,11 +386,10 @@ SET
     } catch (err) {
         if (!res.headersSent) {
             if (err.message.includes("buoy_balance_cant_negative")) {
-                const HTTP_ERROR_CONFLICT = 409;
                 const message = "Oops this place has run out of fishes!";
                 res
-                    .status(HTTP_ERROR_CONFLICT)
-                    .json(myUtils.generateJSONSkeleton(message, HTTP_ERROR_CONFLICT));
+                    .status(CONSTANTS.HTTP.CONFLICT)
+                    .json(myUtils.generateJSONSkeleton(message, CONSTANTS.HTTP.CONFLICT));
             } else {
                 myUtils.handleDBError(err, res);
             }
@@ -412,7 +400,7 @@ SET
 // other than the already defined routes
 router.all("*", function (_, res) {
     res
-        .status(404)
+        .status(CONSTANTS.HTTP.NOT_FOUND)
         .json(
             myUtils.generateJSONSkeleton("You are accessing page that does not exist!", 404)
         );

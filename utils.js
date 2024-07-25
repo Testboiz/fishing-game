@@ -1,10 +1,11 @@
+const CONSTANTS = require("./constants");
 const utils = {};
 
 // default handling of error
 utils.handleDBError = function handleDBError(err, res) {
     jsonOutput = {
         message: "the database blew up",
-        status: 500,
+        status: CONSTANTS.HTTP.INTERNAL_SERVER_ERROR,
         debugMsg: err.message,
         debugStack: err.stack,
     };
