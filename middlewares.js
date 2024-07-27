@@ -39,7 +39,7 @@ WHERE buoy_uuid = ? AND player_username = ?;`;
         const rows = stmt.get(buoy_uuid, player_username);
         return rows;
     } catch (err) {
-        myUtils.handleDBError(err, res);
+        myUtils.handleError(err, res);
     }
 }
 
@@ -118,7 +118,6 @@ middleware.playerRegisterMiddleware = function registerPlayerMiddleware(req, res
             }
         }
         else {
-            // TODO: handle changes on display name 
             const sqlInsert = `
     INSERT INTO player
     (player_username, player_display_name, linden_balance) 
@@ -129,7 +128,7 @@ middleware.playerRegisterMiddleware = function registerPlayerMiddleware(req, res
         }
     }
     catch (err) {
-        myUtils.handleDBError(err, res);
+        myUtils.handleError(err, res);
     }
 };
 
@@ -189,7 +188,7 @@ middleware.castMiddleware = function castCacheMiddleware(req, res, next) {
             }
         }
     } catch (err) {
-        myUtils.handleDBError(err, res);
+        myUtils.handleError(err, res);
     }
 };
 
@@ -208,12 +207,49 @@ middleware.timeoutMiddleware = async function timeoutMiddleware(req, res, next) 
             next();
         }
     } catch (err) {
-        myUtils.handleDBError(err, res);
+        myUtils.handleError(err, res);
     }
 };
 
-// TODO FISHPOT
+// TODO TEST FISHPOT
 middleware.fishpotMiddleware = function fishpotMiddleware(req, res, next) {
-    next();
+    const sqlGetFishpot = `SELECT fishpot, buoy_location_name FROM buoy WHERE buoy_uuid = ?`;
+    const sqlResetFishpot = `UPDATE buoy SET fishpot = 0 WHERE buoy_uuid = ?`;
+    const sqlUpdateAfterFishpot = `
+UPDATE player 
+SET 
+    linden_balance = linden_balance + ?
+    WHERE player_username = ?;
+    `;
+    try {
+        const stmtGetFishpot = db.prepare(sqlGetFishpot);
+        const stmtResetFishpot = db.prepare(sqlResetFishpot);
+        const stmtUpdateAfterFishpot = db.prepare(sqlUpdateAfterFishpot);
+        let fishpotInfo;
+        const fishpotTransaction = db.transaction(function () {
+            fishpotInfo = stmtGetFishpot.get(req.params.buoy_uuid);
+            stmtResetFishpot.run();
+            stmtUpdateAfterFishpot.run();
+        });
+        const msg = `
+=============================
+FISHPOT WINNER 
+
+Congratulations to ${req.params.player_username}
+That has won the ${fishpotInfo.fishpot} L$ fishpot of this buoy 
+In ${fishpotInfo.location_name}
+=============================
+    `;
+        if (Math.random() < 0.01) {
+            fishpotTransaction();
+            res.json(myUtils.generateJSONSkeleton(msg));
+        }
+        else {
+            next();
+        }
+    }
+    catch (err) {
+        myUtils.handleError(err, res);
+    }
 };
 module.exports = middleware;

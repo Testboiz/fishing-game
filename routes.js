@@ -91,7 +91,7 @@ function setRedisCastCache(buoy_uuid, rod_uuid, worm_type) {
 }
 
 router.get("/", function (_, res) {
-    res.json(myUtils.generateJSONSkeleton("Server is up!", 200));
+    res.json(myUtils.generateJSONSkeleton("Server is up!"));
 });
 
 router.post("/rod", middlewares.playerRegisterMiddleware, function (req, res) {
@@ -121,13 +121,12 @@ VALUES
             res.status(CONSTANTS.HTTP.CONFLICT).json(errMessage);
         }
         else {
-            myUtils.handleDBError(err, res);
+            myUtils.handleError(err, res);
         }
 
     }
 });
 
-// TODO : eventually scale to different rod tiers
 router.post("/rod/add-worms", function (req, res) {
     const params = {
         rod_uuid: req.query.rod_uuid,
@@ -158,7 +157,7 @@ router.post("/rod/add-worms", function (req, res) {
         res.json(responseJSON);
     }
     catch (err) {
-        myUtils.handleDBError(err, res);
+        myUtils.handleError(err, res);
     }
 });
 
@@ -183,7 +182,7 @@ router.post("/buoy", middlewares.playerRegisterMiddleware, function (req, res) {
             const errMessage = myUtils.generateJSONSkeleton(errText, CONSTANTS.HTTP.CONFLICT);
             res.status(CONSTANTS.HTTP.CONFLICT).json(errMessage);
         } else {
-            myUtils.handleDBError(err, res);
+            myUtils.handleError(err, res);
         }
     }
 });
@@ -202,7 +201,7 @@ router.post("/buoy/set-location-name", function (req, res) {
         res.json(myUtils.generateJSONSkeleton(msg));
     }
     catch (err) {
-        myUtils.handleDBError(err, res);
+        myUtils.handleError(err, res);
     }
 });
 
@@ -222,7 +221,7 @@ router.post("/buoy/add-balance", function (req, res) {
         res.json(myUtils.generateJSONSkeleton(msg));
     }
     catch (err) {
-        myUtils.handleDBError(err, res);
+        myUtils.handleError(err, res);
     }
 });
 
@@ -253,7 +252,7 @@ router.get("/auth", function (req, res) {
         }
         res.status(jsonOutput["status"]).json(jsonOutput);
     } catch (err) {
-        myUtils.handleDBError(err, res);
+        myUtils.handleError(err, res);
     }
 });
 
@@ -395,9 +394,9 @@ SET
                 above_rank: rankInfo.above_rank,
             },
         };
-        // res.json(myUtils.generateJSONSkeleton(generateResponseString(fishCaught,wormInfo,rankInfo),200));
+        // res.json(myUtils.generateJSONSkeleton(generateResponseString(fishCaught,wormInfo,rankInfo)));
         // for debug visualization
-        res.json(myUtils.generateJSONSkeleton(debugObj, 200));
+        res.json(myUtils.generateJSONSkeleton(debugObj));
     } catch (err) {
         if (!res.headersSent) {
             if (err.message.includes("buoy_balance_cant_negative")) {
@@ -406,7 +405,7 @@ SET
                     .status(CONSTANTS.HTTP.CONFLICT)
                     .json(myUtils.generateJSONSkeleton(message, CONSTANTS.HTTP.CONFLICT));
             } else {
-                myUtils.handleDBError(err, res);
+                myUtils.handleError(err, res);
             }
         }
     }
@@ -414,10 +413,11 @@ SET
 
 // other than the already defined routes
 router.all("*", function (_, res) {
+    const errMessage = "You are accessing page that does not exist!";
     res
         .status(CONSTANTS.HTTP.NOT_FOUND)
         .json(
-            myUtils.generateJSONSkeleton("You are accessing page that does not exist!", 404)
+            myUtils.generateJSONSkeleton(errMessage, CONSTANTS.HTTP.NOT_FOUND)
         );
 });
 
