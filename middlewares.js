@@ -222,25 +222,30 @@ SET
     WHERE player_username = ?;
     `;
     try {
-        const stmtGetFishpot = db.prepare(sqlGetFishpot);
-        const stmtResetFishpot = db.prepare(sqlResetFishpot);
-        const stmtUpdateAfterFishpot = db.prepare(sqlUpdateAfterFishpot);
-        let fishpotInfo;
+        let fishpotInfo, msg;
         const fishpotTransaction = db.transaction(function () {
+            // preparation is here to minimize database use
+            const stmtGetFishpot = db.prepare(sqlGetFishpot);
+            const stmtResetFishpot = db.prepare(sqlResetFishpot);
+            const stmtUpdateAfterFishpot = db.prepare(sqlUpdateAfterFishpot);
+
             fishpotInfo = stmtGetFishpot.get(req.params.buoy_uuid);
-            stmtResetFishpot.run();
-            stmtUpdateAfterFishpot.run();
-        });
-        const msg = `
+            stmtResetFishpot.run(req.params.buoy_uuid);
+            stmtUpdateAfterFishpot.run(fishpotInfo.fishpot, req.params.player_username);
+
+            const fishpotNumber = Number(fishpotInfo.fishpot);
+            const numberString = fishpotNumber.toFixed(2);
+            msg = `
 =============================
 FISHPOT WINNER 
 
 Congratulations to ${req.params.player_username}
-That has won the ${fishpotInfo.fishpot} L$ fishpot of this buoy 
-In ${fishpotInfo.location_name}
+That has won the ${numberString} L$ fishpot of this buoy 
+In ${fishpotInfo.buoy_location_name}
 =============================
     `;
-        if (Math.random() < 0.01) {
+        });
+        if (Math.random() < CONSTANTS.FISHPOT_RATE) {
             fishpotTransaction();
             res.json(myUtils.generateJSONSkeleton(msg));
         }

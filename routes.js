@@ -256,7 +256,7 @@ router.get("/auth", function (req, res) {
     }
 });
 
-router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, function (req, res) {
+router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, middlewares.fishpotMiddleware, function (req, res) {
     const sqlForFish = `
 WITH probability AS (
     SELECT ABS(RANDOM() / CAST(-9223372036854775808 AS REAL)) AS probability
@@ -345,7 +345,7 @@ SET
         const stmtCastHandling = db.prepare(sqlCastHandling);
         const stmtupdateAfterCast = db.prepare(sqlUpdateAfterCast);
 
-        let fishCaught, wormInfo, rankInfo;
+        let fishCaught, wormInfo, rankInfo, fish_value_multiplied;
 
         const castTransaction = db.transaction(function () {
             stmtCastHandling.run(req.params.buoy_uuid, req.params.player_username);
@@ -354,6 +354,7 @@ SET
             fishCaught = stmtFish.get(req.params.buoy_uuid);
             wormInfo = stmtWormInfo.get(req.params.rod_uuid);
             fish_value_multiplied = fishCaught.fish_value * fishCaught.multiplier;
+            const fishpot_value = fish_value_multiplied * CONSTANTS.FISHPOT_RATE;
 
             stmtBuoy.run(
                 fish_value_multiplied,

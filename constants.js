@@ -2,7 +2,7 @@ const constants = {
     HTTP: {
         OK: 200,
         BAD_REQUEST: 400,
-        FORBIDDEN: 403, // oops it should be bad request
+        FORBIDDEN: 403,
         NOT_FOUND: 404,
         CONFLICT: 409,
         TOO_MANY_REQUESTS: 429,
@@ -14,12 +14,13 @@ const constants = {
         ENCHANTED_WORMS: 45,
         MAGIC_WORMS: 30
     },
-    BALANCE_CUT: 0.85,
+    BALANCE_CUT: 0.85, // temporal implementation
     CAST_LIMIT: 51,
-    FISPOT_RATE: 0.01,
+    FISHPOT_RATE: 0.01,
     MILISECONDS_IN_DAY: 24 * 60 * 60 * 1000,
     TAX: 0.15, // temporal flat 15% tax
     TEMP_XP: 1,
+    TWO_DIGITS_PRECISION: 2
 };
 
 module.exports = constants;
