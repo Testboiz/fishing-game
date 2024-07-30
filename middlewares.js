@@ -83,9 +83,10 @@ function checkSpook(res, buoy_uuid, player_username) {
             timeDifference <= CONSTANTS.MILISECONDS_IN_DAY &&
             timeDifference >= 0
         ) {
+            console.debug("rows :" + rows);
             var msg = `Oops, You have Spooked this buoy, you can come back in ${remainingTime}`;
             res
-                .status()
+                .status(CONSTANTS.HTTP.TOO_MANY_REQUESTS)
                 .json(myUtils.generateJSONSkeleton(msg, CONSTANTS.HTTP.TOO_MANY_REQUESTS));
             return false; // fail
         }
@@ -133,7 +134,7 @@ middleware.playerRegisterMiddleware = function registerPlayerMiddleware(req, res
 };
 
 // TODO implement with redis
-middleware.castMiddleware = function castCacheMiddleware(req, res, next) {
+middleware.castMiddleware = async function castCacheMiddleware(req, res, next) {
     try {
         const params = {
             player_username: req.query.player_username,
@@ -141,12 +142,15 @@ middleware.castMiddleware = function castCacheMiddleware(req, res, next) {
             rod_uuid: req.query.rod_uuid,
         };
         myUtils.ensureParametersOrValueNotNull(params);
-        req.params = params; // this would simplify the code in the route
 
-        const rod_id = params.rod_uuid;
+        req.params = params; // this would simplify the code in the route
+        const keyString = params.buoy_uuid.toString() + params.rod_uuid.toString() + params.player_username.toString();
+        const value = await client.get(keyString);
+        const valueObject = JSON.parse(value);
+
         if (
-            !buoyCache[rod_id] ||
-            buoyCache[rod_id].currentBuoy !== params.buoy_uuid
+            !valueObject ||
+            valueObject.currentBuoy !== params.buoy_uuid
         ) {
             let loginStatus = buoyLogin(
                 res,
@@ -162,14 +166,15 @@ middleware.castMiddleware = function castCacheMiddleware(req, res, next) {
 
             // if u can login then add cache
             if (loginStatus === true) {
-                buoyCache[rod_id] = {
+                const valueString = JSON.stringify({
                     currentBuoy: params.buoy_uuid,
                     casts: castInfo.casts + 1, // to account updated value later
-                };
+                });
+                client.set(keyString, valueString);
                 next();
             }
         } else {
-            if (buoyCache[rod_id].casts === CONSTANTS.CAST_LIMIT) {
+            if (valueObject.casts === CONSTANTS.CAST_LIMIT) {
                 let status = checkSpook(res, params.buoy_uuid, params.player_username);
                 if (status === true) {
                     // reset cast
@@ -178,12 +183,13 @@ middleware.castMiddleware = function castCacheMiddleware(req, res, next) {
                         params.buoy_uuid,
                         params.player_username
                     );
-                    console.log(castInfo);
-                    buoyCache[rod_id].casts = castInfo.casts + 1;
+                    valueObject.casts = castInfo.casts + 1; // this works due to a trigger
+                    client.set(keyString, JSON.stringify(valueObject));
                     next(); // if the counter is finally over
                 }
             } else {
-                buoyCache[rod_id].casts += 1;
+                valueObject.casts += 1;
+                client.set(keyString, JSON.stringify(valueObject));
                 next();
             }
         }
