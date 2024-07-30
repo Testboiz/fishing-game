@@ -14,6 +14,14 @@ const constants = {
         ENCHANTED_WORMS: 45,
         MAGIC_WORMS: 30
     },
+    TIME_BOOST_FACTOR: {
+        ALACRITY: 0.85,
+        SHUBBIE: {
+            BLUE: 0.95,
+            GREEN: 0.9,
+            RED: 0.85
+        }
+    },
     BALANCE_CUT: 0.85, // temporal implementation
     CAST_LIMIT: 51,
     FISHPOT_RATE: 0.01,

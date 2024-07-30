@@ -24,6 +24,9 @@ Magic Worms: ${wormInfo.magic_worms}
 Gold : Coming Soon!
 
         `,
+        (wormInfo.alacrity_charges != 0)
+            ? `${wormInfo.alacrity_charges} Effects of Alacrity (speed cast)`
+            : "",
         `
 You caught ${fishCaught.fish_name}
 Fishing Exp: ${rankInfo.xp} (+1)
@@ -45,28 +48,71 @@ Rank (overall):  ${rankInfo.rank}
     return strArray.join("\n");
 }
 
+function calculateTax(res, buoy_uuid) {
+    try {
+        const stmt = db.prepare("SELECT buoy_color FROM buoy WHERE buoy_uuid = ?");
+        const color = stmt.get(buoy_uuid);
+        switch (color.buoy_color) {
+            case "red":
+                return 0.5;
+            case "yellow":
+                return 0.75;
+            case "blue":
+                return 0.85;
+            default:
+                throw new Error("Unidentified Buoy Color");
+        }
+    }
+    catch (err) {
+        myUtils.handleError(err, res);
+    }
+}
+
 function __setRedisCastCacheCallback(err, reply) {
     if (err) throw err;
     console.log(reply);
 }
 
-function setRedisCastCache(buoy_uuid, rod_uuid, worm_type) {
-    // TODO: Implement boosts like Alacrity and shubbie
+function setRedisCastCache(buoy_uuid, rod_uuid, worm_type, {
+    alacrity = false,
+    shubbie = false,
+    shubbieType = "blue"
+} = {}) {
     const keyString = buoy_uuid.toString() + rod_uuid.toString();
+    var timeMultiplier = 1;
+    if (alacrity) {
+        // alacrity is 15% speed boost
+        timeMultiplier = timeMultiplier * CONSTANTS.TIME_BOOST_FACTOR.ALACRITY;
+    }
+    if (shubbie) {
+        // TODO : properly implement after the shubbie table is made
+        switch (shubbieType) {
+            case "blue":
+                timeMultiplier = timeMultiplier * CONSTANTS.TIME_BOOST_FACTOR.SHUBBIE.BLUE;
+                break;
+            case "green":
+                timeMultiplier = timeMultiplier * CONSTANTS.TIME_BOOST_FACTOR.SHUBBIE.GREEN;
+                break;
+            case "red":
+                timeMultiplier = timeMultiplier * CONSTANTS.TIME_BOOST_FACTOR.SHUBBIE.RED;
+                break;
+            default:
+                throw new myUtils.BadRequestFormatError();
+        }
+    }
     switch (worm_type) {
         case 1:
             client.setEx(
                 keyString,
-                CONSTANTS.TIMEOUT.SMALL_WORMS,
+                Math.round(CONSTANTS.TIMEOUT.SMALL_WORMS * timeMultiplier),
                 "Small Worms",
                 __setRedisCastCacheCallback
             );
-
             break;
         case 2:
             client.setEx(
                 keyString,
-                CONSTANTS.TIMEOUT.TASTY_WORMS,
+                Math.round(CONSTANTS.TIMEOUT.TASTY_WORMS * timeMultiplier),
                 "Tasty Worms",
                 __setRedisCastCacheCallback
             );
@@ -74,7 +120,7 @@ function setRedisCastCache(buoy_uuid, rod_uuid, worm_type) {
         case 3:
             client.setEx(
                 keyString,
-                CONSTANTS.TIMEOUT.ENCHANTED_WORMS,
+                Math.round(CONSTANTS.TIMEOUT.ENCHANTED_WORMS * timeMultiplier),
                 "Enchanted Worms",
                 __setRedisCastCacheCallback
             );
@@ -82,11 +128,13 @@ function setRedisCastCache(buoy_uuid, rod_uuid, worm_type) {
         case 4:
             client.setEx(
                 keyString,
-                CONSTANTS.TIMEOUT.MAGIC_WORMS,
+                Math.round(CONSTANTS.TIMEOUT.MAGIC_WORMS * timeMultiplier),
                 "Magic Worms",
                 __setRedisCastCacheCallback
             );
             break;
+        default:
+            throw new myUtils.BadRequestFormatError();
     }
 }
 
@@ -164,19 +212,19 @@ router.post("/rod/add-worms", function (req, res) {
 router.post("/buoy", middlewares.playerRegisterMiddleware, function (req, res) {
     const params = {
         buoy_uuid: req.query.buoy_uuid,
+        buoy_type: req.query.buoy_type,
         player_username: req.query.player_username,
         player_display_name: req.query.player_display_name
     };
     const msg = "Buoy has been registered!";
     try {
         myUtils.ensureParametersOrValueNotNull(params);
-        const sql = `INSERT INTO buoy (buoy_uuid) VALUES (?)`;
+        const sql = `INSERT INTO buoy (buoy_uuid, buoy_color) VALUES (?,?)`;
         const stmt = db.prepare(sql);
-        stmt.run(params.buoy_uuid);
+        stmt.run(params.buoy_uuid, params.buoy_color);
         res.json(myUtils.generateJSONSkeleton(msg));
     }
     catch (err) {
-        console.log(typeof err.message);
         if (err.message.includes("UNIQUE constraint failed")) {
             const errText = "Buoy is already registered";
             const errMessage = myUtils.generateJSONSkeleton(errText, CONSTANTS.HTTP.CONFLICT);
@@ -205,19 +253,18 @@ router.post("/buoy/set-location-name", function (req, res) {
     }
 });
 
-// TODO scale to different buoy colors
 router.post("/buoy/add-balance", function (req, res) {
     const params = {
         buoy_uuid: req.query.buoy_uuid,
         linden_amnount: Number(req.query.linden_amnount) // this has to be number
     };
-    const msg = `Buoy balance added by ${params.linden_amnount * CONSTANTS.BALANCE_CUT} L$ (15% Tax Applied)`;
+    const msg = `Buoy balance added by ${params.linden_amnount} L$ (Tax Applied)`;
     try {
         myUtils.ensureParametersOrValueNotNull(params);
-        const sql = `UPDATE buoy SET buoy_balance = buoy_balance + ?*? WHERE buoy_uuid = ?`;
+        const sql = `UPDATE buoy SET buoy_balance = buoy_balance + ? * ? WHERE buoy_uuid = ?`;
         const stmt = db.prepare(sql);
-        console.log(CONSTANTS.BALANCE_CUT);
-        stmt.run(params.linden_amnount, CONSTANTS.BALANCE_CUT, params.buoy_uuid);
+        const tax = calculateTax(res, params.buoy_uuid);
+        stmt.run(params.linden_amnount, tax, params.buoy_uuid);
         res.json(myUtils.generateJSONSkeleton(msg));
     }
     catch (err) {
@@ -257,6 +304,7 @@ router.get("/auth", function (req, res) {
 });
 
 router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, middlewares.fishpotMiddleware, function (req, res) {
+    // TODO add fish lottery
     const sqlForFish = `
 WITH probability AS (
     SELECT ABS(RANDOM() / CAST(-9223372036854775808 AS REAL)) AS probability
@@ -310,11 +358,25 @@ SET
     small_worms = CASE WHEN selected_worm = 1 THEN small_worms - 1 ELSE small_worms END,
     tasty_worms = CASE WHEN selected_worm = 2 THEN tasty_worms - 1 ELSE tasty_worms END,
     enchanted_worms = CASE WHEN selected_worm = 3 THEN enchanted_worms - 1 ELSE enchanted_worms END,
-    magic_worms = CASE WHEN selected_worm = 4 THEN magic_worms - 1 ELSE magic_worms END
+    magic_worms = CASE WHEN selected_worm = 4 THEN magic_worms - 1 ELSE magic_worms END,
+    alacrity_charges = CASE WHEN alacrity_charges > 0 THEN alacrity_charges - 1 ELSE alacrity_charges END
 WHERE rod_uuid = ?;
     `;
+    const sqlAddAlacrityFromFishpot = `
+UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?;
+`;
     const sqlWormInfo = `
-SELECT small_worms, tasty_worms, enchanted_worms, magic_worms, selected_worm FROM rod_info WHERE rod_uuid = ?;
+SELECT 
+    small_worms, 
+    tasty_worms, 
+    enchanted_worms, 
+    magic_worms, 
+    selected_worm, 
+    alacrity_charges 
+FROM 
+    rod_info 
+WHERE 
+    rod_uuid = ?;
     `;
     const sqlForBuoys = `
 UPDATE buoy 
@@ -346,6 +408,7 @@ SET
         const stmtupdateAfterCast = db.prepare(sqlUpdateAfterCast);
 
         let fishCaught, wormInfo, rankInfo, fish_value_multiplied;
+        var alacrityEnabled = false;
 
         const castTransaction = db.transaction(function () {
             stmtCastHandling.run(req.params.buoy_uuid, req.params.player_username);
@@ -356,9 +419,12 @@ SET
             fish_value_multiplied = fishCaught.fish_value * fishCaught.multiplier;
             const fishpot_value = fish_value_multiplied * CONSTANTS.FISHPOT_RATE;
 
+            if (wormInfo.alacrity_charges != 0 && Number.isInteger(wormInfo.alacrity_charges)) {
+                alacrityEnabled = true;
+            }
             stmtBuoy.run(
                 fish_value_multiplied,
-                fish_value_multiplied * CONSTANTS.FISHPOT_RATE,
+                fishpot_value,
                 req.params.buoy_uuid
             );
 
@@ -370,9 +436,13 @@ SET
 
             rankInfo = stmtRank.get(req.params.player_username);
         });
-
         castTransaction();
-        setRedisCastCache(req.params.buoy_uuid, req.params.rod_uuid, wormInfo.selected_worm);
+        setRedisCastCache(
+            req.params.buoy_uuid,
+            req.params.rod_uuid,
+            wormInfo.selected_worm,
+            { alacrity: alacrityEnabled }
+        );
 
         const debugObj = {
             worms: {
@@ -383,6 +453,7 @@ SET
             },
             fish: fishCaught.fish_name,
             xp: rankInfo.xp,
+            alacrity: wormInfo.alacrity_charges,
             debugCast: fishCaught.casts,
             earnings: {
                 linden_balance: rankInfo.linden_balance,

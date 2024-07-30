@@ -199,6 +199,8 @@ middleware.timeoutMiddleware = async function timeoutMiddleware(req, res, next) 
         const value = await client.get(key);
         const msg = `Wait a moment, your fishing rod is not ready yet`;
         if (value) {
+            // ttl for debugging
+            // console.debug(await client.ttl(key));
             res.status(CONSTANTS.HTTP.TOO_MANY_REQUESTS).json(
                 myUtils.generateJSONSkeleton(msg, CONSTANTS.HTTP.TOO_MANY_REQUESTS)
             );
@@ -211,7 +213,6 @@ middleware.timeoutMiddleware = async function timeoutMiddleware(req, res, next) 
     }
 };
 
-// TODO TEST FISHPOT
 middleware.fishpotMiddleware = function fishpotMiddleware(req, res, next) {
     const sqlGetFishpot = `SELECT fishpot, buoy_location_name FROM buoy WHERE buoy_uuid = ?`;
     const sqlResetFishpot = `UPDATE buoy SET fishpot = 0 WHERE buoy_uuid = ?`;

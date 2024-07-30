@@ -8,6 +8,7 @@
   },
   "author": "Ender Blood Dragonborn",
   "license": "ISC",
+  "private": true,
   "dependencies": {
     "express": "^4.19.2",
     "redis": "^4.6.15",

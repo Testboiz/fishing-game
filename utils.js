@@ -10,6 +10,8 @@ class BadRequestFormatError extends Error {
     }
 }
 
+utils.BadRequestFormatError = BadRequestFormatError;
+
 // default handling of error
 utils.handleError = function handleError(err, res) {
     if (err instanceof BadRequestFormatError) {
