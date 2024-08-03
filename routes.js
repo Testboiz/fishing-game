@@ -13,19 +13,38 @@ db.pragma("journal_mode = WAL");
 const client = redis.createClient();
 client.connect().then();
 
+function generateLotteryMessage(lotteryType) {
+    const lotteryMessage = "Fish Lottery:\n";
+    switch (lotteryType) {
+        case "alacrity":
+            return lotteryMessage + "You've won 5 Alacrity charges (fast cast)\n";
+        case "powder":
+            return lotteryMessage + "You've won 2 Magic Powder (Shubbies Pet Food)!\n";
+        case "xp":
+            return lotteryMessage + "You've won 2 Fishing Experience\n";
+        default:
+            if (lotteryType.includes("Worms")) {
+                return lotteryMessage + `You've won 2 ${lotteryType}!\n`;
+            }
+            else {
+                return "\n";
+            }
+    }
+}
+
 // Helper function to handle the complexity of multiline string handling
-function generateResponseString(fishCaught, wormInfo, rankInfo) {
+function generateResponseString(fishCaught, rodInfo, rankInfo, lotteryInfo) {
     var strArray = [
         `
-Small Worms: ${wormInfo.small_worms}
-Tasty Worms: ${wormInfo.tasty_worms}
-Enchanted Worms: ${wormInfo.enchanted_worms}
-Magic Worms: ${wormInfo.magic_worms}
+Small Worms: ${rodInfo.small_worms}
+Tasty Worms: ${rodInfo.tasty_worms}
+Enchanted Worms: ${rodInfo.enchanted_worms}
+Magic Worms: ${rodInfo.magic_worms}
 Gold : Coming Soon!
 
         `,
-        (wormInfo.alacrity_charges != 0)
-            ? `${wormInfo.alacrity_charges} Effects of Alacrity (speed cast)`
+        (rodInfo.alacrity_charges != 0)
+            ? `${rodInfo.alacrity_charges} Effects of Alacrity (speed cast)`
             : "",
         `
 You caught ${fishCaught.fish_name}
@@ -43,7 +62,9 @@ Rank (overall):  ${rankInfo.rank}
             ? `${rankInfo.xp_difference} XP to beat ${rankInfo.above_display_name}  ranked ${rankInfo.above_rank}.`
             : `You are the top fisher!`,
         `\n`,
-        `Rank (monthly):  Coming Soon!`,
+        `Rank (monthly):  Coming Soon!\n`,
+        (lotteryInfo.first) ? generateLotteryMessage(lotteryInfo.first) : "",
+        (lotteryInfo.second) ? generateLotteryMessage(lotteryInfo.second) : "",
     ];
     return strArray.join("\n");
 }
@@ -138,6 +159,188 @@ function setRedisCastCache(buoy_uuid, rod_uuid, worm_type, {
     }
 }
 
+function runLottery(res) {
+    try {
+        const sql = `
+SELECT name 
+FROM fish_lottery 
+WHERE probability < ? 
+ORDER BY probability DESC 
+LIMIT 1;
+    `;
+        const prob = Math.random();
+        if (prob < CONSTANTS.FISH_LOTTERY_RATE) {
+            const stmt = db.prepare(sql);
+            let lotteryRow = stmt.get(prob);
+            if (lotteryRow) {
+                return lotteryRow.name;
+            }
+            else {
+                return null;
+            }
+        }
+        return null;
+    }
+    catch (err) {
+        myUtils.handleError(err, res);
+        return null;
+    }
+};
+
+function computeXP(xpLotteryTriggers, res) {
+    // TODO rod tiers, weekend triple xp
+    try {
+        var eXP = 1;
+        if (xpLotteryTriggers.first) eXP += 2;
+        if (xpLotteryTriggers.second) eXP += 2;
+        // select rod tier here
+        // check if its weekend here
+        return eXP;
+    } catch (err) {
+        myUtils.handleError(err, res);
+        return null;
+    }
+}
+
+function executeLotteries(stmtLottery, rod_uuid, shubbie_uuid) {
+    for (const key in stmtLottery.inventory) {
+        if (stmtLottery.inventory.hasOwnProperty(key)) {
+            const item = stmtLottery.inventory[key];
+            if (item && typeof item.run === 'function') {
+                if (key) item.run(rod_uuid);
+            }
+        }
+    }
+    for (const key in stmtLottery.shubbie) {
+        if (stmtLottery.inventory.hasOwnProperty(key)) {
+            const item = stmtLottery.inventory[key];
+            if (item && typeof item.run === 'function') {
+                if (key) item.run(shubbie_uuid);
+            }
+        }
+    }
+}
+
+function setWormType(worm_type) {
+    switch (worm_type) {
+        case 1:
+            return "Small Worms";
+        case 2:
+            return "Tasty Worms";
+        case 3:
+            return "Enchanted Worms";
+        case 4:
+            return "Magic Worms";
+        default:
+            return "Undefined Worm Type";
+    }
+}
+
+function updateAfterCast(req, fish_value_multiplied, rod_type, res) {
+    const sqlUpdateAfterCast = `
+UPDATE player 
+SET 
+    linden_balance = linden_balance + ?
+    WHERE player_username = ?;
+    `;
+    const sqlForUpdateRank = `UPDATE rank_overall  SET xp = xp + ? WHERE player_username = ?; `;
+
+    const lotteryStatus = {}, lotterySQL = {}, xpTriggers = {};
+    const stmtLottery = {
+        inventory: {},
+        shubbie: {}
+    };
+
+    try {
+        const firstLottery = runLottery(res);
+        const secondLottery = runLottery(res);
+
+        lotteryStatus.first = firstLottery;
+        lotteryStatus.second = secondLottery;
+
+        const stmtupdateAfterCast = db.prepare(sqlUpdateAfterCast);
+        const stmtForUpdateRank = db.prepare(sqlForUpdateRank);
+
+        switch (firstLottery) {
+            case "worm":
+                lotterySQL.firstSQL = `
+UPDATE rod_info
+SET
+    small_worms = CASE WHEN selected_worm = 1 THEN small_worms + 2 ELSE small_worms END,
+    tasty_worms = CASE WHEN selected_worm = 2 THEN tasty_worms + 2 ELSE tasty_worms END,
+    enchanted_worms = CASE WHEN selected_worm = 3 THEN enchanted_worms + 2 ELSE enchanted_worms END,
+    magic_worms = CASE WHEN selected_worm = 4 THEN magic_worms + 2 ELSE magic_worms END
+WHERE rod_uuid = ?
+                    `;
+                lotteryStatus.first = setWormType(req.params.worm_type);
+                break;
+            case "alacrity":
+                if (rod_type > CONSTANTS.ENUMS.ROD.ENCHANTED) {
+                    lotterySQL.firstSQL = `
+UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?
+                `;
+                }
+                break;
+            case "powder":
+                // TODO : soon(tm)
+                break;
+            case "xp":
+                xpTriggers.first = true;
+                break;
+        }
+        switch (secondLottery) {
+            case "worm":
+                lotterySQL.secondSQL = `
+UPDATE rod_info
+SET
+    small_worms = CASE WHEN selected_worm = 1 THEN small_worms + 2 ELSE small_worms END,
+    tasty_worms = CASE WHEN selected_worm = 2 THEN tasty_worms + 2 ELSE tasty_worms END,
+    enchanted_worms = CASE WHEN selected_worm = 3 THEN enchanted_worms + 2 ELSE enchanted_worms END,
+    magic_worms = CASE WHEN selected_worm = 4 THEN magic_worms + 2 ELSE magic_worms END
+WHERE rod_uuid = ?
+                    `;
+                lotteryStatus.second = setWormType(req.params.worm_type);
+                break;
+            case "alacrity":
+                if (rod_type > CONSTANTS.ENUMS.ROD.ENCHANTED) {
+                    lotterySQL.secondSQL = `
+UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?
+                `;
+                }
+                break;
+            case "powder":
+                //TODO : soon(tm)
+                break;
+            case "xp":
+                xpTriggers.second = true;
+                break;
+        }
+
+        if (lotterySQL.firstSQL) stmtLottery.inventory.first = db.prepare(lotterySQL.firstSQL);
+        if (lotterySQL.secondSQL) stmtLottery.inventory.second = db.prepare(lotterySQL.secondSQL);
+
+        const updateAfterCastTransaction = db.transaction(function () {
+            stmtForUpdateRank.run(
+                computeXP(xpTriggers, res),
+                req.params.player_username
+            );
+
+            stmtupdateAfterCast.run(
+                fish_value_multiplied,
+                req.params.player_username
+            );
+
+            executeLotteries(stmtLottery, req.params.rod_uuid);
+        });
+
+        updateAfterCastTransaction();
+
+        return lotteryStatus;
+    }
+    catch (err) {
+        myUtils.handleError(err, res);
+    }
+}
 router.get("/", function (_, res) {
     res.json(myUtils.generateJSONSkeleton("Server is up!"));
 });
@@ -146,7 +349,8 @@ router.post("/rod", middlewares.playerRegisterMiddleware, function (req, res) {
     const params = {
         rod_uuid: req.query.rod_uuid,
         player_username: req.query.player_username,
-        player_display_name: req.query.player_display_name
+        player_display_name: req.query.player_display_name,
+        rod_type: req.query.rod_type
     };
     myUtils.ensureParametersOrValueNotNull(params);
     const msg = "Player and rod registered with free 100 Small Worms";
@@ -154,12 +358,12 @@ router.post("/rod", middlewares.playerRegisterMiddleware, function (req, res) {
     try {
         const sql = `
 INSERT INTO rod_info 
-(rod_uuid, small_worms, player_username)
+(rod_uuid, small_worms, player_username,rod_type)
 VALUES
-(?,100,?)
+(?,100,?,?)
     `;
         const stmt = db.prepare(sql);
-        stmt.run(params.rod_uuid, params.player_username);
+        stmt.run(params.rod_uuid, params.player_username, params.rod_type);
         res.json(responseJSON);
     }
     catch (err) {
@@ -303,7 +507,7 @@ router.get("/auth", function (req, res) {
     }
 });
 
-router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, middlewares.fishpotMiddleware, function (req, res) {
+router.put("/cast", /*middlewares.timeoutMiddleware,*/ middlewares.castMiddleware, middlewares.fishpotMiddleware, function (req, res) {
     // TODO add fish lottery
     const sqlForFish = `
 WITH probability AS (
@@ -362,22 +566,20 @@ SET
     alacrity_charges = CASE WHEN alacrity_charges > 0 THEN alacrity_charges - 1 ELSE alacrity_charges END
 WHERE rod_uuid = ?;
     `;
-    const sqlAddAlacrityFromFishpot = `
-UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?;
-`;
-    const sqlWormInfo = `
-SELECT 
-    small_worms, 
-    tasty_worms, 
-    enchanted_worms, 
-    magic_worms, 
-    selected_worm, 
-    alacrity_charges 
-FROM 
-    rod_info 
-WHERE 
-    rod_uuid = ?;
-    `;
+    const sqlRodInfo = `
+    SELECT 
+        small_worms, 
+        tasty_worms, 
+        enchanted_worms, 
+        magic_worms, 
+        selected_worm, 
+        alacrity_charges,
+        rod_type
+    FROM 
+        rod_info 
+    WHERE 
+        rod_uuid = ?;
+        `;
     const sqlForBuoys = `
 UPDATE buoy 
     SET 
@@ -385,29 +587,21 @@ UPDATE buoy
     fishpot = fishpot +  ?
 WHERE buoy_uuid = ?;
     `;
-    const sqlForUpdateRank = `UPDATE rank_overall  SET xp = xp + ? WHERE player_username = ?; `;
     const sqlCastHandling = `
 INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
     ON CONFLICT (buoy_uuid, player_username) DO UPDATE SET casts = casts + 1;
     `;
 
-    const sqlUpdateAfterCast = `
-UPDATE player 
-SET 
-    linden_balance = linden_balance + ?
-    WHERE player_username = ?;
-    `;
+
     try {
         const stmtFish = db.prepare(sqlForFish);
         const stmtRank = db.prepare(sqlForRank);
         const stmtWorm = db.prepare(sqlForWorms);
-        const stmtWormInfo = db.prepare(sqlWormInfo);
+        const stmtRodInfo = db.prepare(sqlRodInfo);
         const stmtBuoy = db.prepare(sqlForBuoys);
-        const stmtForUpdateRank = db.prepare(sqlForUpdateRank);
         const stmtCastHandling = db.prepare(sqlCastHandling);
-        const stmtupdateAfterCast = db.prepare(sqlUpdateAfterCast);
 
-        let fishCaught, wormInfo, rankInfo, fish_value_multiplied;
+        let fishCaught, rodInfo, rankInfo, fish_value_multiplied, lotteryInfo;
         var alacrityEnabled = false;
 
         const castTransaction = db.transaction(function () {
@@ -415,24 +609,23 @@ SET
             stmtWorm.run(req.params.rod_uuid);
 
             fishCaught = stmtFish.get(req.params.buoy_uuid);
-            wormInfo = stmtWormInfo.get(req.params.rod_uuid);
+            rodInfo = stmtRodInfo.get(req.params.rod_uuid);
             fish_value_multiplied = fishCaught.fish_value * fishCaught.multiplier;
             const fishpot_value = fish_value_multiplied * CONSTANTS.FISHPOT_RATE;
 
-            if (wormInfo.alacrity_charges != 0 && Number.isInteger(wormInfo.alacrity_charges)) {
+            if (rodInfo.alacrity_charges != 0) {
                 alacrityEnabled = true;
             }
+
             stmtBuoy.run(
                 fish_value_multiplied,
                 fishpot_value,
                 req.params.buoy_uuid
             );
 
-            stmtForUpdateRank.run(CONSTANTS.TEMP_XP, req.params.player_username);
-            stmtupdateAfterCast.run(
-                fish_value_multiplied,
-                req.params.player_username
-            );
+            req.params.worm_type = rodInfo.selected_worm;
+
+            lotteryInfo = updateAfterCast(req, fish_value_multiplied, rodInfo.rod_type, res);
 
             rankInfo = stmtRank.get(req.params.player_username);
         });
@@ -440,20 +633,20 @@ SET
         setRedisCastCache(
             req.params.buoy_uuid,
             req.params.rod_uuid,
-            wormInfo.selected_worm,
+            req.params.worm_type,
             { alacrity: alacrityEnabled }
         );
 
         const debugObj = {
             worms: {
-                small: wormInfo.small_worms,
-                tasty: wormInfo.tasty_worms,
-                enchanted: wormInfo.enchanted_worms,
-                magic: wormInfo.magic_worms,
+                small: rodInfo.small_worms,
+                tasty: rodInfo.tasty_worms,
+                enchanted: rodInfo.enchanted_worms,
+                magic: rodInfo.magic_worms,
             },
             fish: fishCaught.fish_name,
             xp: rankInfo.xp,
-            alacrity: wormInfo.alacrity_charges,
+            alacrity: rodInfo.alacrity_charges,
             debugCast: fishCaught.casts,
             earnings: {
                 linden_balance: rankInfo.linden_balance,
@@ -466,7 +659,7 @@ SET
                 above_rank: rankInfo.above_rank,
             },
         };
-        // res.json(myUtils.generateJSONSkeleton(generateResponseString(fishCaught,wormInfo,rankInfo)));
+        // res.json(myUtils.generateJSONSkeleton(generateResponseString(fishCaught, rodInfo, rankInfo, lotteryInfo)));
         // for debug visualization
         res.json(myUtils.generateJSONSkeleton(debugObj));
     } catch (err) {

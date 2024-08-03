@@ -133,7 +133,6 @@ middleware.playerRegisterMiddleware = function registerPlayerMiddleware(req, res
     }
 };
 
-// TODO implement with redis
 middleware.castMiddleware = async function castCacheMiddleware(req, res, next) {
     try {
         const params = {
@@ -219,6 +218,7 @@ middleware.timeoutMiddleware = async function timeoutMiddleware(req, res, next) 
     }
 };
 
+// TODO : fishpot shouldn't be too common for small wins
 middleware.fishpotMiddleware = function fishpotMiddleware(req, res, next) {
     const sqlGetFishpot = `SELECT fishpot, buoy_location_name FROM buoy WHERE buoy_uuid = ?`;
     const sqlResetFishpot = `UPDATE buoy SET fishpot = 0 WHERE buoy_uuid = ?`;
@@ -262,6 +262,43 @@ In ${fishpotInfo.buoy_location_name}
     }
     catch (err) {
         myUtils.handleError(err, res);
+    }
+};
+
+middleware.lotteryMiddleware = function (req, res, next) {
+    const lotteryItem = runLottery(res);
+    if (lotteryItem) {
+        try {
+            let sql;
+            switch (lotteryItem) {
+                case "worm":
+                    sql = `
+UPDATE rod_info
+SET
+    small_worms = CASE WHEN selected_worm = 1 THEN small_worms + 2 ELSE small_worms END,
+    tasty_worms = CASE WHEN selected_worm = 2 THEN tasty_worms + 2 ELSE tasty_worms END,
+    enchanted_worms = CASE WHEN selected_worm = 3 THEN enchanted_worms + 2 ELSE enchanted_worms END,
+    magic_worms = CASE WHEN selected_worm = 4 THEN magic_worms + 2 ELSE magic_worms END
+WHERE rod_uuid = ?
+                    `;
+                    break;
+                case "xp":
+                    // TODO make an unified way to compute xp
+                    sql = "UPDATE rank_overall  SET xp = xp + 2 WHERE player_username = ?";
+                    break;
+                case "powder":
+                    // TODO after shubbie is implemented
+                    sql = "";
+                    break;
+            }
+            db.prepare(sql).run();
+        }
+        catch (err) {
+            myUtils.handleError(err, res);
+        }
+    }
+    else {
+        next();
     }
 };
 module.exports = middleware;

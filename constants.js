@@ -8,6 +8,17 @@ const constants = {
         TOO_MANY_REQUESTS: 429,
         INTERNAL_SERVER_ERROR: 500
     },
+    ENUMS: {
+        ROD: {
+            BEGINNER: 1,
+            PRO: 2,
+            ENCHANTED: 3,
+            MACIC: 4,
+            SHARK: 5,
+            COMP_1: 6, // maybe unused, only for compartibility 
+            COMP_2: 7
+        }
+    },
     TIMEOUT: {
         SMALL_WORMS: 75,
         TASTY_WORMS: 60,
@@ -24,6 +35,7 @@ const constants = {
     },
     BALANCE_CUT: 0.85, // temporal implementation
     CAST_LIMIT: 51,
+    FISH_LOTTERY_RATE: 0.2,
     FISHPOT_RATE: 0.01,
     MILISECONDS_IN_DAY: 24 * 60 * 60 * 1000,
     TAX: 0.15, // temporal flat 15% tax

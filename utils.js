@@ -3,7 +3,7 @@ const utils = {};
 
 class BadRequestFormatError extends Error {
     constructor() {
-        const message = "Null or undefined parameter value(s)";
+        const message = "Null, undefined or NaN parameter value(s)";
         super(message);
 
         this.message = message;
@@ -42,14 +42,16 @@ utils.generateJSONSkeleton = function generateJSONSkeleton(objectOrMessage, http
 };
 
 utils.ensureParametersOrValueNotNull = function ensureParametersOrValueNotNull(paramObject) {
-    if (paramObject === null || paramObject === undefined) {
+    if (paramObject === null || paramObject === undefined || Number.isNaN(paramObject)) {
         throw new BadRequestFormatError();
     }
     for (let key in paramObject) {
-        if (paramObject[key] === null || paramObject[key] === undefined) {
+        if (paramObject[key] === null || paramObject[key] === undefined || Number.isNaN(paramObject)) {
             throw new BadRequestFormatError();
         }
     }
 };
+
+utils.isNotNullOrUndefined = (obj) => { return (typeof obj !== 'undefined' && obj !== null); };
 
 module.exports = utils;
