@@ -6,7 +6,6 @@ const myUtils = require("./utils");
 
 const CONSTANTS = require("./constants");
 
-const buoyCache = {};
 const middleware = {};
 
 const client = redis.createClient();
@@ -265,40 +264,4 @@ In ${fishpotInfo.buoy_location_name}
     }
 };
 
-middleware.lotteryMiddleware = function (req, res, next) {
-    const lotteryItem = runLottery(res);
-    if (lotteryItem) {
-        try {
-            let sql;
-            switch (lotteryItem) {
-                case "worm":
-                    sql = `
-UPDATE rod_info
-SET
-    small_worms = CASE WHEN selected_worm = 1 THEN small_worms + 2 ELSE small_worms END,
-    tasty_worms = CASE WHEN selected_worm = 2 THEN tasty_worms + 2 ELSE tasty_worms END,
-    enchanted_worms = CASE WHEN selected_worm = 3 THEN enchanted_worms + 2 ELSE enchanted_worms END,
-    magic_worms = CASE WHEN selected_worm = 4 THEN magic_worms + 2 ELSE magic_worms END
-WHERE rod_uuid = ?
-                    `;
-                    break;
-                case "xp":
-                    // TODO make an unified way to compute xp
-                    sql = "UPDATE rank_overall  SET xp = xp + 2 WHERE player_username = ?";
-                    break;
-                case "powder":
-                    // TODO after shubbie is implemented
-                    sql = "";
-                    break;
-            }
-            db.prepare(sql).run();
-        }
-        catch (err) {
-            myUtils.handleError(err, res);
-        }
-    }
-    else {
-        next();
-    }
-};
 module.exports = middleware;
