@@ -11,23 +11,6 @@ const middleware = {};
 const client = redis.createClient();
 client.connect().then();
 
-function sqlToJsDateUTC(sqlDate) {
-    // Split the SQL datetime string into an array
-    var sqlDateArr = sqlDate.split("-");
-    var year = parseInt(sqlDateArr[0]);
-    var month = parseInt(sqlDateArr[1]) - 1; // Months are zero-based in JavaScript
-    var dayTime = sqlDateArr[2].split(" ");
-    var day = parseInt(dayTime[0]);
-    var time = dayTime[1].split(":");
-    var hour = parseInt(time[0]);
-    var minute = parseInt(time[1]);
-    var second = parseInt(time[2]);
-
-    // Create a new Date object
-    var jsDate = new Date(Date.UTC(year, month, day, hour, minute, second));
-
-    return jsDate;
-}
 
 function getCastsAndSpookTime(res, buoy_uuid, player_username) {
     try {
@@ -70,7 +53,7 @@ function buoyLogin(res, buoy_uuid, rod_uuid, player_username) {
 function checkSpook(res, buoy_uuid, player_username) {
     try {
         const rows = getCastsAndSpookTime(res, buoy_uuid, player_username);
-        const dateSql = sqlToJsDateUTC(rows.previous_spook_time);
+        const dateSql = myUtils.sqlToJsDateUTC(rows.previous_spook_time);
         const timeDifference = getRemainingTime(dateSql);
 
         const date_hh_mm_ss = new Date(null);

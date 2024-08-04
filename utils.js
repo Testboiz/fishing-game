@@ -52,6 +52,30 @@ utils.ensureParametersOrValueNotNull = function ensureParametersOrValueNotNull(p
     }
 };
 
+utils.sqlToJSDateUTC = function sqlToJsDateUTC(sqlDate) {
+    // Split the SQL datetime string into an array
+    var sqlDateArr = sqlDate.split("-");
+    var year = parseInt(sqlDateArr[0]);
+    var month = parseInt(sqlDateArr[1]) - 1; // Months are zero-based in JavaScript
+    var dayTime = sqlDateArr[2].split(" ");
+    var day = parseInt(dayTime[0]);
+    var time = dayTime[1].split(":");
+    var hour = parseInt(time[0]);
+    var minute = parseInt(time[1]);
+    var second = parseInt(time[2]);
+
+    // Create a new Date object
+    var jsDate = new Date(Date.UTC(year, month, day, hour, minute, second));
+
+    return jsDate;
+};
+
+utils.isWeekend = function isWeekend(datetime) {
+    let day = datetime.getDay();
+    let WEEKEND_DAYS = CONSTANTS.DAYS;
+    return (day === WEEKEND_DAYS.SATURDAY || day === WEEKEND_DAYS.SUNDAY);
+};
+
 utils.isNotNullOrUndefined = (obj) => { return (typeof obj !== 'undefined' && obj !== null); };
 
 module.exports = utils;

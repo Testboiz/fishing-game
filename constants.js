@@ -1,4 +1,13 @@
 const constants = {
+    BASE_XP: {
+        BEGINNER: 1,
+        PRO: 2,
+        DELUXE: 4,
+        MAGIC: 8,
+        SHARK: 8,
+        COMP_1: 10,
+        COMP_2: 12
+    },
     HTTP: {
         OK: 200,
         BAD_REQUEST: 400,
@@ -7,6 +16,10 @@ const constants = {
         CONFLICT: 409,
         TOO_MANY_REQUESTS: 429,
         INTERNAL_SERVER_ERROR: 500
+    },
+    DAYS: {
+        SATURDAY: 6,
+        SUNDAY: 0
     },
     ENUMS: {
         ROD: {

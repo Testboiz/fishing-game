@@ -187,14 +187,40 @@ LIMIT 1;
     }
 };
 
-function computeXP(xpLotteryTriggers, res) {
-    // TODO rod tiers, weekend triple xp
+function getBaseXP(rod_type) {
+    const ROD_TYPES = CONSTANTS.ENUMS.ROD;
+    const BASE_XP = CONSTANTS.BASE_XP;
+    switch (rod_type) {
+        case ROD_TYPES.BEGINNER:
+            return BASE_XP.BEGINNER;
+        case ROD_TYPES.PRO:
+            return BASE_XP.PRO;
+        case ROD_TYPES.ENCHANTED:
+            return BASE_XP.ENCHANTED;
+        case ROD_TYPES.MACIC:
+            return BASE_XP.MAGIC;
+        case ROD_TYPES.SHARK:
+            return BASE_XP.SHARK;
+        case ROD_TYPES.COMP_1:
+            return BASE_XP.COMP_1;
+        case ROD_TYPES.COMP_2:
+            return BASE_XP.COMP_2;
+        default:
+            throw new Error("Invalid Rod");
+    }
+}
+
+function computeXP(xpLotteryTriggers, rod_type, res) {
     try {
-        var eXP = 1;
+        var eXP = getBaseXP(rod_type);
+        const currentTime = new Date();
+        const isWeekend = myUtils.isWeekend(currentTime);
+
+        if (isWeekend) {
+            eXP = eXP * 3;
+        }
         if (xpLotteryTriggers.first) eXP += 2;
         if (xpLotteryTriggers.second) eXP += 2;
-        // select rod tier here
-        // check if its weekend here
         return eXP;
     } catch (err) {
         myUtils.handleError(err, res);
@@ -282,7 +308,7 @@ UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?
                 }
                 break;
             case "powder":
-                // TODO : soon(tm)
+                // soon(tm)
                 break;
             case "xp":
                 xpTriggers.first = true;
@@ -309,7 +335,7 @@ UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?
                 }
                 break;
             case "powder":
-                //TODO : soon(tm)
+                // soon(tm)
                 break;
             case "xp":
                 xpTriggers.second = true;
@@ -321,7 +347,7 @@ UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?
 
         const updateAfterCastTransaction = db.transaction(function () {
             stmtForUpdateRank.run(
-                computeXP(xpTriggers, res),
+                computeXP(xpTriggers, rod_type, res),
                 req.params.player_username
             );
 
