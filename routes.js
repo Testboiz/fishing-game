@@ -13,6 +13,8 @@ db.pragma("journal_mode = WAL");
 const client = redis.createClient();
 client.connect().then();
 
+// TODO : make a cashout 
+
 function generateLotteryMessage(lotteryType) {
     const lotteryMessage = "Fish Lottery:\n";
     switch (lotteryType) {
@@ -533,7 +535,7 @@ router.get("/auth", function (req, res) {
     }
 });
 
-router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, middlewares.fishpotMiddleware, function (req, res) {
+router.put("/cast", /*middlewares.timeoutMiddleware, */middlewares.castMiddleware, middlewares.fishpotMiddleware, function (req, res) {
     const sqlForFish = `
 WITH probability AS (
     SELECT ABS(RANDOM() / CAST(-9223372036854775808 AS REAL)) AS probability

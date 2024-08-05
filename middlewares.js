@@ -53,7 +53,7 @@ function buoyLogin(res, buoy_uuid, rod_uuid, player_username) {
 function checkSpook(res, buoy_uuid, player_username) {
     try {
         const rows = getCastsAndSpookTime(res, buoy_uuid, player_username);
-        const dateSql = myUtils.sqlToJsDateUTC(rows.previous_spook_time);
+        const dateSql = myUtils.sqlToJSDateUTC(rows.previous_spook_time);
         const timeDifference = getRemainingTime(dateSql);
 
         const date_hh_mm_ss = new Date(null);
@@ -212,18 +212,23 @@ SET
     `;
     try {
         let fishpotInfo, msg;
-        const fishpotTransaction = db.transaction(function () {
+        const fishpotTransaction = db.transaction(function (callback) {
             // preparation is here to minimize database use
             const stmtGetFishpot = db.prepare(sqlGetFishpot);
             const stmtResetFishpot = db.prepare(sqlResetFishpot);
             const stmtUpdateAfterFishpot = db.prepare(sqlUpdateAfterFishpot);
 
             fishpotInfo = stmtGetFishpot.get(req.params.buoy_uuid);
-            stmtResetFishpot.run(req.params.buoy_uuid);
-            stmtUpdateAfterFishpot.run(fishpotInfo.fishpot, req.params.player_username);
 
             const fishpotNumber = Number(fishpotInfo.fishpot);
             const numberString = fishpotNumber.toFixed(2);
+
+            if (fishpotNumber < CONSTANTS.FISHPOT_MINIMUM) {
+                return callback("Fishpot Too Low");
+            }
+            stmtResetFishpot.run(req.params.buoy_uuid);
+            stmtUpdateAfterFishpot.run(fishpotInfo.fishpot, req.params.player_username);
+
             msg = `
 =============================
 FISHPOT WINNER 
@@ -233,13 +238,22 @@ That has won the ${numberString} L$ fishpot of this buoy
 In ${fishpotInfo.buoy_location_name}
 =============================
     `;
+            callback(null);
         });
-        if (Math.random() < CONSTANTS.FISHPOT_RATE) {
-            fishpotTransaction();
-            res.json(myUtils.generateJSONSkeleton(msg));
+        const rng = Math.random();
+        if (rng < CONSTANTS.FISHPOT_RATE) {
+            fishpotTransaction(function (status) {
+                if (status === "Fishpot Too Low") {
+                    return next();
+                }
+                else {
+                    return res.json(myUtils.generateJSONSkeleton(msg));
+                }
+            });
+            return;
         }
         else {
-            next();
+            return next();
         }
     }
     catch (err) {

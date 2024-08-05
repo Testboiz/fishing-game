@@ -50,6 +50,7 @@ const constants = {
     CAST_LIMIT: 51,
     FISH_LOTTERY_RATE: 0.2,
     FISHPOT_RATE: 0.01,
+    FISHPOT_MINIMUM: 30,
     MILISECONDS_IN_DAY: 24 * 60 * 60 * 1000,
     TAX: 0.15, // temporal flat 15% tax
     TEMP_XP: 1,
