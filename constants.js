@@ -48,6 +48,7 @@ const constants = {
     },
     BALANCE_CUT: 0.85, // temporal implementation
     CAST_LIMIT: 51,
+    CASHOUT_DEFAULT_VALUE: 300,
     FISH_LOTTERY_RATE: 0.2,
     FISHPOT_RATE: 0.01,
     FISHPOT_MINIMUM: 30,

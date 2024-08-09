@@ -76,6 +76,27 @@ utils.isWeekend = function isWeekend(datetime) {
     return (day === WEEKEND_DAYS.SATURDAY || day === WEEKEND_DAYS.SUNDAY);
 };
 
+utils.getRemainingMiliseconds = function getRemainingMiliseconds(dateObject) {
+    const dateAfterTwentyFourHours = new Date(dateObject);
+    dateAfterTwentyFourHours.setUTCDate(dateObject.getUTCDate() + 1);
+
+    const now = new Date();
+    const timeDifference = dateAfterTwentyFourHours.getTime() - now.getTime();
+    return timeDifference;
+};
+
+utils.getHHMMSSFromMiliseconds = function getHHMMSSFromMiliseconds(miliseconds) {
+    const date_hh_mm_ss = new Date(null);
+    date_hh_mm_ss.setTime(miliseconds);
+    const remainingTime = date_hh_mm_ss.toISOString().slice(11, 19);
+    return remainingTime;
+};
+
+utils.roundToFixed = function roundToFixed(numberLike, digits = 2) {
+    const number = Number(numberLike);
+    return number.toFixed(digits);
+};
+
 utils.isNotNullOrUndefined = (obj) => { return (typeof obj !== 'undefined' && obj !== null); };
 
 module.exports = utils;

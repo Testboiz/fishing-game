@@ -13,7 +13,6 @@ db.pragma("journal_mode = WAL");
 const client = redis.createClient();
 client.connect().then();
 
-// TODO : make a cashout 
 
 function generateLotteryMessage(lotteryType) {
     const lotteryMessage = "Fish Lottery:\n";
@@ -369,6 +368,70 @@ UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?
         myUtils.handleError(err, res);
     }
 }
+
+function getCashoutInfo(player_username, res) {
+    const sqlCashoutInfo = `
+SELECT cashout.cashout_budget, cashout.last_major_cashout, player.linden_balance, cashout_values.cashout_value
+FROM cashout 
+INNER JOIN player ON cashout.player_username = player.player_username
+INNER JOIN cashout_values ON cashout.cashout_type = cashout_values.cashout_type
+WHERE cashout.player_username = ?
+`;
+
+    try {
+        const cashoutInfo = db.prepare(sqlCashoutInfo).get(player_username);
+        const balance = Number(cashoutInfo.linden_balance);
+        const majorCashoutTime = myUtils.sqlToJSDateUTC(cashoutInfo.last_major_cashout);
+        const cashoutBudget = Number(cashoutInfo.cashout_budget);
+        const cashoutMaxValue = Number(cashoutInfo.cashout_value);
+        const remainingTimeMs = myUtils.getRemainingMiliseconds(majorCashoutTime);
+        const absoluteRemainingTime = Math.abs(remainingTimeMs);
+
+        const isWithinADay = (absoluteRemainingTime < CONSTANTS.MILISECONDS_IN_DAY) ? true : false;
+
+        return {
+            balance: balance,
+            budget: Math.min(Math.floor(balance), cashoutBudget),
+            maxValue: cashoutMaxValue,
+            isWithinADay: isWithinADay,
+            remainingTimeMs: absoluteRemainingTime
+        };
+    }
+    catch (err) {
+        myUtils.handleError(err, res);
+        return null;
+    }
+}
+
+function resetCashout(player_username, res) {
+    const sqlUpdatePlayerTableAfterCashout = `
+    UPDATE player SET linden_balance = linden_balance - ? 
+    WHERE player_username = ?`;
+    const sqlUpdateCashoutTableAfterCashoutOverADay = `
+UPDATE cashout
+    SET
+        cashout_budget = :cashout_max_value - :cashout_amnount,
+        last_major_cashout = DATETIME('now')
+    WHERE player_username = :username
+    `;
+    try {
+        const stmtUpdateCashoutTableAfterCashoutOverADay = db.prepare(sqlUpdateCashoutTableAfterCashoutOverADay);
+        const stmtUpdatePlayerTableAfterCashout = db.prepare(sqlUpdatePlayerTableAfterCashout);
+        const cashoutInfo = getCashoutInfo(player_username, res);
+        const cashoutAfterTimeLimit = db.transaction(function () {
+            stmtUpdateCashoutTableAfterCashoutOverADay.run({
+                "username": player_username,
+                "cashout_amnount": cashoutInfo.budget,
+                "cashout_max_value": cashoutInfo.maxValue
+            });
+            stmtUpdatePlayerTableAfterCashout.run(cashoutInfo.budget, player_username);
+        });
+        cashoutAfterTimeLimit();
+    } catch (err) {
+        myUtils.handleError(err, res);
+    }
+}
+
 router.get("/", function (_, res) {
     res.json(myUtils.generateJSONSkeleton("Server is up!"));
 });
@@ -498,6 +561,98 @@ router.post("/buoy/add-balance", function (req, res) {
         const tax = calculateTax(res, params.buoy_uuid);
         stmt.run(params.linden_amnount, tax, params.buoy_uuid);
         res.json(myUtils.generateJSONSkeleton(msg));
+    }
+    catch (err) {
+        myUtils.handleError(err, res);
+    }
+});
+
+router.post("/cashout", function (req, res) {
+    const player_username = req.query.player_username;
+    const sqlUpdateCashoutTableAfterCashoutWithinADay = `
+UPDATE cashout
+    SET
+    cashout_budget = cashout.cashout_budget - :cashout_amnount,
+    last_major_cashout =
+        CASE
+            WHEN cashout.cashout_budget - :cashout_amnount = 0
+            THEN DATETIME('now')
+            ELSE last_major_cashout
+        END
+    WHERE cashout.player_username = :username
+    `;
+    const sqlUpdatePlayerTableAfterCashout = `
+    UPDATE player SET linden_balance = linden_balance - ? 
+    WHERE player_username = ?`;
+    const sqlUpdateCashoutTableAfterCashoutOverADay = `
+UPDATE cashout
+    SET
+        cashout_budget = :cashout_max_value - :cashout_amnount,
+        last_major_cashout = DATETIME('now')
+    WHERE player_username = :username
+    `; // this would also reset the budget to the initial value
+    try {
+        myUtils.ensureParametersOrValueNotNull(player_username);
+        const cashoutInfo = getCashoutInfo(player_username, res);
+        const stmtUpdateCashoutTableAfterCashoutWithinADay = db.prepare(sqlUpdateCashoutTableAfterCashoutWithinADay);
+        const stmtUpdateCashoutTableAfterCashoutOverADay = db.prepare(sqlUpdateCashoutTableAfterCashoutOverADay);
+        const stmtUpdatePlayerTableAfterCashout = db.prepare(sqlUpdatePlayerTableAfterCashout);
+
+        const roundedBalance = myUtils.roundToFixed(cashoutInfo.balance);
+        if (Math.floor(cashoutInfo.balance) === 0) {
+            const msgNoBalance = `You need at least 1L$ to cashout \n You had ${roundedBalance} L$`;
+            res.status(CONSTANTS.HTTP.CONFLICT).json(myUtils.generateJSONSkeleton(msgNoBalance, CONSTANTS.HTTP.CONFLICT));
+        }
+        else if (cashoutInfo.budget === 0) {
+            if (cashoutInfo.isWithinADay) {
+                const remainingMs = cashoutInfo.remainingTimeMs;
+                const hh_mm_ss = myUtils.getHHMMSSFromMiliseconds(remainingMs);
+                const msgLimit = `You have reached the cashout limit for today, you can cashout again in ${hh_mm_ss}`;
+                res.status(CONSTANTS.HTTP.CONFLICT).json(myUtils.generateJSONSkeleton(msgLimit, CONSTANTS.HTTP.CONFLICT));
+            }
+            else {
+                let updatedInfo;
+                const updateAndCashout = db.transaction(function () {
+                    resetCashout(player_username, res);
+                    updatedInfo = getCashoutInfo(player_username, res);
+                    stmtUpdateCashoutTableAfterCashoutOverADay.run({
+                        "username": player_username,
+                        "cashout_amnount": updatedInfo.budget,
+                        "cashout_max_value": updatedInfo.maxValue
+                    });
+                    stmtUpdatePlayerTableAfterCashout.run(updatedInfo.budget, player_username);
+                });
+                updateAndCashout();
+                const updatedRoundedBalance = myUtils.roundToFixed(updatedInfo.balance);
+                const msg = `Congratulations! You have cashed out ${updatedRoundedBalance} L$ `;
+                res.json(myUtils.generateJSONSkeleton(msg));
+            }
+        }
+        else {
+            const msg = `Congratulations! You have cashed out ${roundedBalance} L$`;
+            const cashoutWithinADay = db.transaction(function () {
+                stmtUpdateCashoutTableAfterCashoutWithinADay.run({
+                    "username": player_username,
+                    "cashout_amnount": cashoutInfo.budget
+                });
+                stmtUpdatePlayerTableAfterCashout.run(cashoutInfo.budget, player_username);
+            });
+            const cashoutAfterTimeLimit = db.transaction(function () {
+                stmtUpdateCashoutTableAfterCashoutOverADay.run({
+                    "username": player_username,
+                    "cashout_amnount": cashoutInfo.budget,
+                    "cashout_max_value": cashoutInfo.maxValue
+                });
+                stmtUpdatePlayerTableAfterCashout.run(cashoutInfo.budget, player_username);
+            });
+            if (cashoutInfo.isWithinADay) {
+                cashoutWithinADay();
+            }
+            else {
+                cashoutAfterTimeLimit();
+            }
+            res.json(myUtils.generateJSONSkeleton(msg));
+        }
     }
     catch (err) {
         myUtils.handleError(err, res);

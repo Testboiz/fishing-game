@@ -5,6 +5,7 @@ const redis = require("redis");
 const myUtils = require("./utils");
 
 const CONSTANTS = require("./constants");
+const utils = require("./utils");
 
 const middleware = {};
 
@@ -23,15 +24,6 @@ WHERE buoy_uuid = ? AND player_username = ?;`;
     } catch (err) {
         myUtils.handleError(err, res);
     }
-}
-
-function getRemainingTime(spookDate) {
-    const dateAfterTwentyFourHours = new Date(spookDate);
-    dateAfterTwentyFourHours.setUTCDate(spookDate.getUTCDate() + 1);
-
-    const now = new Date();
-    const timeDifference = dateAfterTwentyFourHours.getTime() - now.getTime();
-    return timeDifference;
 }
 
 function buoyLogin(res, buoy_uuid, rod_uuid, player_username) {
@@ -54,11 +46,8 @@ function checkSpook(res, buoy_uuid, player_username) {
     try {
         const rows = getCastsAndSpookTime(res, buoy_uuid, player_username);
         const dateSql = myUtils.sqlToJSDateUTC(rows.previous_spook_time);
-        const timeDifference = getRemainingTime(dateSql);
-
-        const date_hh_mm_ss = new Date(null);
-        date_hh_mm_ss.setTime(timeDifference);
-        const remainingTime = date_hh_mm_ss.toISOString().slice(11, 19); // remaining time in hh:mm:ss
+        const timeDifference = myUtils.getRemainingMiliseconds(dateSql);
+        const remainingTime = myUtils.getHHMMSSFromMiliseconds(timeDifference);
 
         if (
             rows.casts === 0 &&
@@ -102,11 +91,17 @@ middleware.playerRegisterMiddleware = function registerPlayerMiddleware(req, res
         }
         else {
             const sqlInsert = `
-    INSERT INTO player
-    (player_username, player_display_name, linden_balance) 
-    VALUES (?,?,0)`;
+INSERT INTO player
+(player_username, player_display_name, linden_balance) 
+VALUES (?,?,0)`;
+            const sqlAddCashout = "INSERT INTO cashout (player_username) VALUES (?)";
             const stmtInsert = db.prepare(sqlInsert);
-            stmtInsert.run(params.player_username, params.player_display_name);
+            const stmtAddCashout = db.prepare(sqlAddCashout);
+            const insertPlayerTransaction = db.transaction(function () {
+                stmtInsert.run(params.player_username, params.player_display_name);
+                stmtAddCashout.run(params.player_username);
+            });
+            insertPlayerTransaction();
             next();
         }
     }
@@ -200,7 +195,6 @@ middleware.timeoutMiddleware = async function timeoutMiddleware(req, res, next) 
     }
 };
 
-// TODO : fishpot shouldn't be too common for small wins
 middleware.fishpotMiddleware = function fishpotMiddleware(req, res, next) {
     const sqlGetFishpot = `SELECT fishpot, buoy_location_name FROM buoy WHERE buoy_uuid = ?`;
     const sqlResetFishpot = `UPDATE buoy SET fishpot = 0 WHERE buoy_uuid = ?`;
@@ -220,8 +214,7 @@ SET
 
             fishpotInfo = stmtGetFishpot.get(req.params.buoy_uuid);
 
-            const fishpotNumber = Number(fishpotInfo.fishpot);
-            const numberString = fishpotNumber.toFixed(2);
+            const numberString = utils.roundToFixed(fishpotInfo.fishpot);
 
             if (fishpotNumber < CONSTANTS.FISHPOT_MINIMUM) {
                 return callback("Fishpot Too Low");
