@@ -6,6 +6,7 @@ const middlewares = require("./middlewares");
 const redis = require("redis");
 const router = express.Router();
 const myUtils = require("./utils");
+const Inventory = require("./inventory");
 
 const CONSTANTS = require("./constants");
 
@@ -34,14 +35,14 @@ function generateLotteryMessage(lotteryType) {
 }
 
 // Helper function to handle the complexity of multiline string handling
-function generateResponseString(fishCaught, rodInfo, rankInfo, lotteryInfo) {
+function generateResponseString(fishCaught, rodInfo, rankInfo, inventoryInfo) {
     var strArray = [
         `
 Small Worms: ${rodInfo.small_worms}
 Tasty Worms: ${rodInfo.tasty_worms}
 Enchanted Worms: ${rodInfo.enchanted_worms}
 Magic Worms: ${rodInfo.magic_worms}
-Gold : Coming Soon!
+Gold : ${inventoryInfo.gold}
 
         `,
         (rodInfo.alacrity_charges != 0)
@@ -50,7 +51,7 @@ Gold : Coming Soon!
         `
 You caught ${fishCaught.fish_name}
 Fishing Exp: ${rankInfo.xp} (+1)
-Fish: Coming Soon!
+Fish: ${inventoryInfo.fish}
 Your Earnings: ${rankInfo.linden_balance} L$ (+${fishCaught.fish_value}) 
 Rank Extras!: Coming Soon!
 Kingdoms Coming Soon! 
@@ -64,8 +65,8 @@ Rank (overall):  ${rankInfo.rank}
             : `You are the top fisher!`,
         `\n`,
         `Rank (monthly):  Coming Soon!\n`,
-        (lotteryInfo.first) ? generateLotteryMessage(lotteryInfo.first) : "",
-        (lotteryInfo.second) ? generateLotteryMessage(lotteryInfo.second) : "",
+        (inventoryInfo.first) ? generateLotteryMessage(inventoryInfo.first) : "",
+        (inventoryInfo.second) ? generateLotteryMessage(inventoryInfo.second) : "",
     ];
     return strArray.join("\n");
 }
@@ -272,21 +273,27 @@ SET
     `;
     const sqlForUpdateRank = `UPDATE rank_overall  SET xp = xp + ? WHERE player_username = ?; `;
 
-    const lotteryStatus = {}, lotterySQL = {}, xpTriggers = {};
+    const inventoryInfo = {}, lotterySQL = {}, xpTriggers = {};
     const stmtLottery = {
         inventory: {},
         shubbie: {}
     };
 
     try {
+        const inventory = Inventory.fromDB(db, req.params.player_username);
+        console.log("inventory :", inventory);
+
         const firstLottery = runLottery(res);
         const secondLottery = runLottery(res);
 
-        lotteryStatus.first = firstLottery;
-        lotteryStatus.second = secondLottery;
+        inventoryInfo.first = firstLottery;
+        inventoryInfo.second = secondLottery;
 
         const stmtupdateAfterCast = db.prepare(sqlUpdateAfterCast);
         const stmtForUpdateRank = db.prepare(sqlForUpdateRank);
+
+        inventory.addGold(1);
+        inventory.addFish(1);
 
         switch (firstLottery) {
             case "worm":
@@ -299,7 +306,7 @@ SET
     magic_worms = CASE WHEN selected_worm = 4 THEN magic_worms + 2 ELSE magic_worms END
 WHERE rod_uuid = ?
                     `;
-                lotteryStatus.first = setWormType(req.params.worm_type);
+                inventoryInfo.first = setWormType(req.params.worm_type);
                 break;
             case "alacrity":
                 if (rod_type > CONSTANTS.ENUMS.ROD.ENCHANTED) {
@@ -309,7 +316,7 @@ UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?
                 }
                 break;
             case "powder":
-                // soon(tm)
+                inventory.addPowder(1);
                 break;
             case "xp":
                 xpTriggers.first = true;
@@ -326,7 +333,7 @@ SET
     magic_worms = CASE WHEN selected_worm = 4 THEN magic_worms + 2 ELSE magic_worms END
 WHERE rod_uuid = ?
                     `;
-                lotteryStatus.second = setWormType(req.params.worm_type);
+                inventoryInfo.second = setWormType(req.params.worm_type);
                 break;
             case "alacrity":
                 if (rod_type > CONSTANTS.ENUMS.ROD.ENCHANTED) {
@@ -336,7 +343,7 @@ UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?
                 }
                 break;
             case "powder":
-                // soon(tm)
+                inventory.addPowder(1);
                 break;
             case "xp":
                 xpTriggers.second = true;
@@ -358,14 +365,16 @@ UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?
             );
 
             executeLotteries(stmtLottery, req.params.rod_uuid);
-        });
 
+            console.log(db.prepare("PRAGMA database_list;").get());
+        });
         updateAfterCastTransaction();
 
-        return lotteryStatus;
+        inventoryInfo.inventory = inventory;
+        return inventoryInfo;
     }
     catch (err) {
-        myUtils.handleError(err, res);
+        throw err;
     }
 }
 
@@ -783,7 +792,7 @@ INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
         const stmtBuoy = db.prepare(sqlForBuoys);
         const stmtCastHandling = db.prepare(sqlCastHandling);
 
-        let fishCaught, rodInfo, rankInfo, fish_value_multiplied, lotteryInfo;
+        let fishCaught, rodInfo, rankInfo, fish_value_multiplied, inventoryInfo;
         var alacrityEnabled = false;
 
         const castTransaction = db.transaction(function () {
@@ -807,9 +816,9 @@ INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
 
             req.params.worm_type = rodInfo.selected_worm;
 
-            lotteryInfo = updateAfterCast(req, fish_value_multiplied, rodInfo.rod_type, res);
-
+            inventoryInfo = updateAfterCast(req, fish_value_multiplied, rodInfo.rod_type, res);
             rankInfo = stmtRank.get(req.params.player_username);
+            inventoryInfo.inventory.updateDB();
         });
         castTransaction();
         setRedisCastCache(
@@ -826,9 +835,12 @@ INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
                 enchanted: rodInfo.enchanted_worms,
                 magic: rodInfo.magic_worms,
             },
+            gold: inventoryInfo.inventory._gold,
             fish: fishCaught.fish_name,
             xp: rankInfo.xp,
             alacrity: rodInfo.alacrity_charges,
+            powder: inventoryInfo.inventory._powder,
+            fish: inventoryInfo.inventory._fish,
             debugCast: fishCaught.casts,
             earnings: {
                 linden_balance: rankInfo.linden_balance,
@@ -841,7 +853,7 @@ INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
                 above_rank: rankInfo.above_rank,
             },
         };
-        // res.json(myUtils.generateJSONSkeleton(generateResponseString(fishCaught, rodInfo, rankInfo, lotteryInfo)));
+        // res.json(myUtils.generateJSONSkeleton(generateResponseString(fishCaught, rodInfo, rankInfo, inventoryInfo)));
         // for debug visualization
         res.json(myUtils.generateJSONSkeleton(debugObj));
     } catch (err) {

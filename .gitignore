@@ -6,3 +6,4 @@ fish-hunt.db
 .vscode/
 *.sql
 *.html
+tests/

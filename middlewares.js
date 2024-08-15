@@ -7,11 +7,25 @@ const myUtils = require("./utils");
 const CONSTANTS = require("./constants");
 const utils = require("./utils");
 
+const Inventory = require("./inventory");
+
 const middleware = {};
 
 const client = redis.createClient();
 client.connect().then();
 
+function addSpookRecord(buoy_uuid, player_username) {
+    const sql = `
+INSERT INTO buoy_casts 
+(buoy_uuid, player_username, casts)
+VALUES
+(?,?,0)`;
+    try {
+        db.prepare(sql).run(buoy_uuid, player_username);
+    } catch (err) {
+        throw err;
+    }
+}
 
 function getCastsAndSpookTime(res, buoy_uuid, player_username) {
     try {
@@ -20,7 +34,14 @@ SELECT casts, previous_spook_time FROM buoy_casts
 WHERE buoy_uuid = ? AND player_username = ?;`;
         const stmt = db.prepare(sql);
         const rows = stmt.get(buoy_uuid, player_username);
-        return rows;
+        if (rows) {
+            return rows;
+        }
+        else {
+            addSpookRecord(buoy_uuid, player_username);
+            const newRows = stmt.get(buoy_uuid, player_username);
+            return newRows;
+        }
     } catch (err) {
         myUtils.handleError(err, res);
     }
@@ -95,11 +116,19 @@ INSERT INTO player
 (player_username, player_display_name, linden_balance) 
 VALUES (?,?,0)`;
             const sqlAddCashout = "INSERT INTO cashout (player_username) VALUES (?)";
+            const sqlAddRank = "INSERT INTO rank_overall (player_username) VALUES (?)";
+
+            console.log(params.player_username);
+            const newInventory = new Inventory({ db: db, player_username: params.player_username });
+
             const stmtInsert = db.prepare(sqlInsert);
             const stmtAddCashout = db.prepare(sqlAddCashout);
+            const stmtAddRank = db.prepare(sqlAddRank);
             const insertPlayerTransaction = db.transaction(function () {
                 stmtInsert.run(params.player_username, params.player_display_name);
                 stmtAddCashout.run(params.player_username);
+                stmtAddRank.run(params.player_username);
+                newInventory.addToDB();
             });
             insertPlayerTransaction();
             next();
