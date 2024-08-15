@@ -273,7 +273,7 @@ SET
     `;
     const sqlForUpdateRank = `UPDATE rank_overall  SET xp = xp + ? WHERE player_username = ?; `;
 
-    const inventoryInfo = {}, lotterySQL = {}, xpTriggers = {};
+    const inventoryInfo = {}, lotterySQL = {}, xpTriggers = {}, inventoryObject = {};
     const stmtLottery = {
         inventory: {},
         shubbie: {}
@@ -281,7 +281,6 @@ SET
 
     try {
         const inventory = Inventory.fromDB(db, req.params.player_username);
-        console.log("inventory :", inventory);
 
         const firstLottery = runLottery(res);
         const secondLottery = runLottery(res);
@@ -366,11 +365,14 @@ UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?
 
             executeLotteries(stmtLottery, req.params.rod_uuid);
 
-            console.log(db.prepare("PRAGMA database_list;").get());
+            inventory.updateDB();
         });
         updateAfterCastTransaction();
 
-        inventoryInfo.inventory = inventory;
+        Object.assign(inventoryObject, inventory);
+        inventoryInfo.inventory = inventoryObject;
+        delete inventoryInfo.inventory.db;
+
         return inventoryInfo;
     }
     catch (err) {
@@ -818,7 +820,6 @@ INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
 
             inventoryInfo = updateAfterCast(req, fish_value_multiplied, rodInfo.rod_type, res);
             rankInfo = stmtRank.get(req.params.player_username);
-            inventoryInfo.inventory.updateDB();
         });
         castTransaction();
         setRedisCastCache(
@@ -827,6 +828,7 @@ INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
             req.params.worm_type,
             { alacrity: alacrityEnabled }
         );
+        console.log(inventoryInfo);
 
         const debugObj = {
             worms: {

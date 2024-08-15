@@ -118,7 +118,6 @@ VALUES (?,?,0)`;
             const sqlAddCashout = "INSERT INTO cashout (player_username) VALUES (?)";
             const sqlAddRank = "INSERT INTO rank_overall (player_username) VALUES (?)";
 
-            console.log(params.player_username);
             const newInventory = new Inventory({ db: db, player_username: params.player_username });
 
             const stmtInsert = db.prepare(sqlInsert);
