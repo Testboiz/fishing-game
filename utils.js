@@ -1,4 +1,4 @@
-const CONSTANTS = require("./constants");
+const CONSTANTS = require("./singletons/constants");
 const utils = {};
 
 class BadRequestFormatError extends Error {

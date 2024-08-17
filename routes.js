@@ -1,16 +1,15 @@
 /** @format */
-
-const db = require("better-sqlite3")("./fish-hunt.db");
 const express = require("express");
 const middlewares = require("./middlewares");
 const redis = require("redis");
 const router = express.Router();
 const myUtils = require("./utils");
+
+const db = require("./singletons/db");
+const CONSTANTS = require("./singletons/constants");
+
 const Inventory = require("./inventory");
 
-const CONSTANTS = require("./constants");
-
-db.pragma("journal_mode = WAL");
 const client = redis.createClient();
 client.connect().then();
 
@@ -42,7 +41,7 @@ Small Worms: ${rodInfo.small_worms}
 Tasty Worms: ${rodInfo.tasty_worms}
 Enchanted Worms: ${rodInfo.enchanted_worms}
 Magic Worms: ${rodInfo.magic_worms}
-Gold : ${inventoryInfo.gold}
+Gold : ${inventoryInfo.inventory._gold}
 
         `,
         (rodInfo.alacrity_charges != 0)
@@ -51,7 +50,7 @@ Gold : ${inventoryInfo.gold}
         `
 You caught ${fishCaught.fish_name}
 Fishing Exp: ${rankInfo.xp} (+1)
-Fish: ${inventoryInfo.fish}
+Fish: ${inventoryInfo.inventory._fish}
 Your Earnings: ${rankInfo.linden_balance} L$ (+${fishCaught.fish_value}) 
 Rank Extras!: Coming Soon!
 Kingdoms Coming Soon! 
@@ -280,7 +279,7 @@ SET
     };
 
     try {
-        const inventory = Inventory.fromDB(db, req.params.player_username);
+        const inventory = Inventory.fromDB(req.params.player_username);
 
         const firstLottery = runLottery(res);
         const secondLottery = runLottery(res);
@@ -371,7 +370,6 @@ UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?
 
         Object.assign(inventoryObject, inventory);
         inventoryInfo.inventory = inventoryObject;
-        delete inventoryInfo.inventory.db;
 
         return inventoryInfo;
     }
@@ -518,7 +516,7 @@ router.post("/rod/add-worms", function (req, res) {
 router.post("/buoy", middlewares.playerRegisterMiddleware, function (req, res) {
     const params = {
         buoy_uuid: req.query.buoy_uuid,
-        buoy_type: req.query.buoy_type,
+        buoy_color: req.query.buoy_color,
         player_username: req.query.player_username,
         player_display_name: req.query.player_display_name
     };
@@ -609,7 +607,7 @@ UPDATE cashout
         const stmtUpdateCashoutTableAfterCashoutOverADay = db.prepare(sqlUpdateCashoutTableAfterCashoutOverADay);
         const stmtUpdatePlayerTableAfterCashout = db.prepare(sqlUpdatePlayerTableAfterCashout);
 
-        const roundedBalance = myUtils.roundToFixed(cashoutInfo.balance);
+        const roundedBalance = myUtils.roundToFixed(cashoutInfo.budget);
         if (Math.floor(cashoutInfo.balance) === 0) {
             const msgNoBalance = `You need at least 1L$ to cashout \n You had ${roundedBalance} L$`;
             res.status(CONSTANTS.HTTP.CONFLICT).json(myUtils.generateJSONSkeleton(msgNoBalance, CONSTANTS.HTTP.CONFLICT));
@@ -674,8 +672,8 @@ router.get("/auth", function (req, res) {
     const query =
         "SELECT * FROM rod_info WHERE rod_uuid = ? AND player_username = ?";
     const params = {
-        id: req.query.id,
-        username: req.query.username,
+        rod_uuid: req.query.rod_uuid,
+        player_username: req.query.player_username,
     };
 
     try {
@@ -683,25 +681,25 @@ router.get("/auth", function (req, res) {
         myUtils.ensureParametersOrValueNotNull(params);
 
         // parameters can be immmediately puy on the function, making the code cleaner
-        const result = stmt.get(params.id, params.username);
+        const result = stmt.get(params.rod_uuid, params.player_username);
         var jsonOutput = {};
 
         if (result) {
-            const msg =
-                "Authorization Successful";
+            const msg = "Authorization Successful";
             jsonOutput = myUtils.generateJSONSkeleton(msg);
-        } else {
-            const msg =
-                "Authorization Failed, Rod cannot be transferred to another player";
+        }
+        else {
+            const msg = "Authorization Failed, Rod cannot be transferred to another player";
             jsonOutput = myUtils.generateJSONSkeleton(msg, CONSTANTS.HTTP.FORBIDDEN);
         }
         res.status(jsonOutput["status"]).json(jsonOutput);
-    } catch (err) {
+    }
+    catch (err) {
         myUtils.handleError(err, res);
     }
 });
 
-router.put("/cast", /*middlewares.timeoutMiddleware, */middlewares.castMiddleware, middlewares.fishpotMiddleware, function (req, res) {
+router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, middlewares.fishpotMiddleware, function (req, res) {
     const sqlForFish = `
 WITH probability AS (
     SELECT ABS(RANDOM() / CAST(-9223372036854775808 AS REAL)) AS probability
@@ -828,8 +826,6 @@ INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
             req.params.worm_type,
             { alacrity: alacrityEnabled }
         );
-        console.log(inventoryInfo);
-
         const debugObj = {
             worms: {
                 small: rodInfo.small_worms,
@@ -855,9 +851,9 @@ INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
                 above_rank: rankInfo.above_rank,
             },
         };
-        // res.json(myUtils.generateJSONSkeleton(generateResponseString(fishCaught, rodInfo, rankInfo, inventoryInfo)));
+        res.json(myUtils.generateJSONSkeleton(generateResponseString(fishCaught, rodInfo, rankInfo, inventoryInfo)));
         // for debug visualization
-        res.json(myUtils.generateJSONSkeleton(debugObj));
+        // res.json(myUtils.generateJSONSkeleton(debugObj));
     } catch (err) {
         if (!res.headersSent) {
             if (err.message.includes("buoy_balance_cant_negative")) {

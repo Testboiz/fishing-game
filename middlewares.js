@@ -1,18 +1,17 @@
 /** @format */
 
-const db = require("better-sqlite3")("./fish-hunt.db");
+const db = require("./singletons/db");
+const CONSTANTS = require("./singletons/constants");
+
 const redis = require("redis");
 const myUtils = require("./utils");
-
-const CONSTANTS = require("./constants");
-const utils = require("./utils");
 
 const Inventory = require("./inventory");
 
 const middleware = {};
 
 const client = redis.createClient();
-client.connect().then();
+client.connect().then(); // to make sure that the client has been properly awaited
 
 function addSpookRecord(buoy_uuid, player_username) {
     const sql = `
@@ -75,7 +74,7 @@ function checkSpook(res, buoy_uuid, player_username) {
             timeDifference <= CONSTANTS.MILISECONDS_IN_DAY &&
             timeDifference >= 0
         ) {
-            console.debug("rows :" + rows);
+            // console.debug("rows :" + rows);
             var msg = `Oops, You have Spooked this buoy, you can come back in ${remainingTime}`;
             res
                 .status(CONSTANTS.HTTP.TOO_MANY_REQUESTS)
@@ -118,7 +117,7 @@ VALUES (?,?,0)`;
             const sqlAddCashout = "INSERT INTO cashout (player_username) VALUES (?)";
             const sqlAddRank = "INSERT INTO rank_overall (player_username) VALUES (?)";
 
-            const newInventory = new Inventory({ db: db, player_username: params.player_username });
+            const newInventory = new Inventory({ player_username: params.player_username });
 
             const stmtInsert = db.prepare(sqlInsert);
             const stmtAddCashout = db.prepare(sqlAddCashout);
@@ -242,7 +241,7 @@ SET
 
             fishpotInfo = stmtGetFishpot.get(req.params.buoy_uuid);
 
-            const numberString = utils.roundToFixed(fishpotInfo.fishpot);
+            const numberString = myUtils.roundToFixed(fishpotInfo.fishpot);
 
             if (fishpotNumber < CONSTANTS.FISHPOT_MINIMUM) {
                 return callback("Fishpot Too Low");

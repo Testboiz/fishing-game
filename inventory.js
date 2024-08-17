@@ -1,22 +1,20 @@
+const db = require("./singletons/db");
+
 class Inventory {
     constructor({
-        db,
         player_username = "",
         gold = 0,
         fish = 0,
         powder = 0
     }) {
-        this.db = db;
         this.player_username = player_username;
         this._gold = gold;
         this._fish = fish;
         this._powder = powder;
-        if (!db) {
-            throw new Error("No Database Connection");
-        }
+
     }
 
-    static fromDB(db, player_username) {
+    static fromDB(player_username) {
         const sql = "SELECT * FROM inventory WHERE player_username = ?";
 
         try {
@@ -25,12 +23,8 @@ class Inventory {
             if (!inventoryRow) {
                 throw new Error("Invalid Key");
             }
-            if (!db) {
-                throw new Error("No Database Connection");
-            }
 
             return new Inventory({
-                db: db,
                 player_username: player_username,
                 gold: inventoryRow.gold,
                 powder: inventoryRow.powder,
@@ -49,7 +43,7 @@ INSERT INTO inventory
 VALUES
 (:username , :gold, :fish, :powder) `;
         try {
-            const stmt = this.db.prepare(sql);
+            const stmt = db.prepare(sql);
             stmt.run({
                 username: this.player_username,
                 gold: this._gold,
@@ -72,7 +66,7 @@ fish = :fish
 WHERE player_username = :username;
 `;
         try {
-            const stmt = this.db.prepare(sql);
+            const stmt = db.prepare(sql);
             stmt.run({
                 username: this.player_username,
                 gold: this._gold,
