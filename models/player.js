@@ -15,7 +15,12 @@ class Player {
         try {
             const stmt = db.prepare(sql);
             const rows = stmt.get(player_username);
-            return new Player(rows.player_username, rows.player_display_name);
+            if (rows) {
+                return new Player(rows.player_username, rows.player_display_name);
+            }
+            else {
+                return null;
+            }
         } catch (err) {
             throw err;
         }
@@ -27,20 +32,23 @@ INSERT INTO player (
     player_display_name
     )
 VALUES (
-    ':player_username',
-    ':player_display_name'
+    :player_username,
+    :player_display_name
     );`;
-        const stmtRank = "INSERT INTO rank_overall (player_username) VALUES (?)";
+        const sqlRank = "INSERT INTO rank_overall (player_username) VALUES (?)";
         try {
             const stmtPlayer = db.prepare(sqlPlayer);
-            const registerTransaction = db.transaction(function () {
+            const stmtRank = db.prepare(sqlRank);
+            console.log(this.#player_display_name);
+            console.log(this.#player_username);
+            const registerTransaction = db.transaction(function (obj) {
                 stmtPlayer.run({
-                    player_username: this.#player_username,
-                    player_display_name: this.#player_display_name
+                    player_username: obj.player_username,
+                    player_display_name: obj.player_display_name
                 });
-                stmtRank.run(player_username);
+                stmtRank.run(obj.player_username);
             });
-            registerTransaction();
+            registerTransaction(this);
         } catch (err) {
             throw err;
         }
@@ -99,10 +107,13 @@ WHERE ro1.player_username = ?;
         }
     }
 
+    get player_username() {
+        return this.#player_username;
+    }
+
     get player_display_name() {
         return this.#player_display_name;
     }
-    set player_display_name(player_display_name) {
-        this.#player_display_name = player_display_name;
-    }
 }
+
+module.exports = Player;

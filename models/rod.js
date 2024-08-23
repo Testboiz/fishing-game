@@ -150,3 +150,5 @@ WHERE rod_uuid = ?;`;
         this.#alacrity_charges = alacrity_charges;
     }
 }
+
+module.exports = Rod;

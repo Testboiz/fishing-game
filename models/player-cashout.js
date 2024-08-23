@@ -117,3 +117,5 @@ UPDATE cashout
         }
     }
 }
+
+module.exports = Cashout;

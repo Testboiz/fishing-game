@@ -224,3 +224,5 @@ INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
     }
 
 }
+
+module.exports = Buoy;

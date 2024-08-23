@@ -64,3 +64,5 @@ LIMIT 1;
         }
     }
 };
+
+module.exports = FishLottery;

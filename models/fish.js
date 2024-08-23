@@ -33,3 +33,5 @@ FROM
         }
     }
 }
+
+module.exports = Fish;
