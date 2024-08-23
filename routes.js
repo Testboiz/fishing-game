@@ -279,7 +279,7 @@ SET
     };
 
     try {
-        const inventory = new Inventory(req.params.player_username);
+        const inventory = Inventory.fromDB(req.params.player_username);
 
         const firstLottery = runLottery(res);
         const secondLottery = runLottery(res);

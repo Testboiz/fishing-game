@@ -5,28 +5,39 @@ class Inventory {
     #gold;
     #fish;
     #powder;
-    constructor(player_username) {
+    constructor({
+        player_username = "",
+        gold = 0,
+        fish = 0,
+        powder = 0
+    }) {
+        this.#player_username = player_username;
+        this.#gold = gold;
+        this.#fish = fish;
+        this.#powder = powder;
+    }
+
+    static fromDB(player_username) {
         const sql = "SELECT * FROM inventory WHERE player_username = ?";
 
         try {
             const stmt = db.prepare(sql);
             const row = stmt.get(player_username);
-
             if (!row) {
                 throw new Error("Invalid Key");
             }
 
-            this.#player_username = player_username;
-            this.#gold = gold;
-            this.#fish = fish;
-            this.#powder = powder;
+            return new Inventory({
+                player_username: player_username,
+                gold: row.gold,
+                powder: row.powder,
+                fish: row.fish
+            });
         }
         catch (err) {
             throw err;
         }
-
     }
-
 
     addToDB() {
         const sql = `
@@ -37,7 +48,7 @@ VALUES
         try {
             const stmt = db.prepare(sql);
             stmt.run({
-                username: this.player_username,
+                username: this.#player_username,
                 gold: this.#gold,
                 fish: this.#fish,
                 powder: this.#powder

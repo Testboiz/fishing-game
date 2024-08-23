@@ -58,6 +58,7 @@ const constants = {
     FISHPOT_RATE: 0.01,
     FISHPOT_MINIMUM: 30,
     MILISECONDS_IN_DAY: 24 * 60 * 60 * 1000,
+    MILISECONDS_IN_SECOND: 1000,
     TAX: 0.15, // temporal flat 15% tax
     TEMP_XP: 1,
     TWO_DIGITS_PRECISION: 2

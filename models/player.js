@@ -39,8 +39,6 @@ VALUES (
         try {
             const stmtPlayer = db.prepare(sqlPlayer);
             const stmtRank = db.prepare(sqlRank);
-            console.log(this.#player_display_name);
-            console.log(this.#player_username);
             const registerTransaction = db.transaction(function (obj) {
                 stmtPlayer.run({
                     player_username: obj.player_username,

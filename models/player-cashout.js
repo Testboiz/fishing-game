@@ -1,4 +1,6 @@
 const db = require("../singletons/db");
+
+const CONSTANTS = require("../singletons/constants");
 const myUtils = require("../utils");
 
 class Cashout {
@@ -9,7 +11,21 @@ class Cashout {
     #maximum_cashout_value;
 
 
-    constructor(player_username) {
+    constructor({
+        player_username = "",
+        cashout_balance = 0,
+        cashout_quota = CONSTANTS.CASHOUT_DEFAULT_VALUE,
+        last_major_cashout = Math.floor(Date.now() / CONSTANTS.MILISECONDS_IN_SECOND),
+        maximum_cashout_value = CONSTANTS.CASHOUT_DEFAULT_VALUE
+    }) {
+        this.#player_username = player_username;
+        this.#cashout_balance = cashout_balance;
+        this.#cashout_quota = cashout_quota;
+        this.#last_major_cashout = last_major_cashout;
+        this.#maximum_cashout_value = maximum_cashout_value;
+    }
+
+    static fromDB(player_username) {
         const sqlCashoutInfo = `
 SELECT cashout.cashout_budget, cashout.last_major_cashout, cashout.balance, cashout_values.cashout_value
 FROM cashout 
@@ -19,16 +35,43 @@ WHERE cashout.player_username = ?
 
         try {
             const cashoutInfo = db.prepare(sqlCashoutInfo).get(player_username);
-            this.#cashout_balance = Number(cashoutInfo.balance);
-            this.#cashout_quota = Math.min(this.#cashout_balance, Number(cashoutInfo.cashout_budget));
-            this.#last_major_cashout = myUtils.sqlToJSDateUTC(cashoutInfo.last_major_cashout);
-            this.#maximum_cashout_value = Number(cashoutInfo.cashout_value);
+            return new Cashout({
+                player_username: player_username,
+                cashout_balance: Number(cashoutInfo.balance),
+                cashout_quota: Math.min(cashoutInfo.balance, Number(cashoutInfo.cashout_budget)),
+                last_major_cashout: myUtils.sqlToJSDateUTC(cashoutInfo.last_major_cashout),
+                maximum_cashout_value: Number(cashoutInfo.cashout_value)
+            });
         }
         catch (err) {
             throw err;
         }
     }
 
+    addToDB() {
+        const sql = `
+INSERT INTO cashout (
+    player_username,
+    balance,
+    last_major_cashout
+  )
+VALUES (
+    :player_username,
+    :balance,
+    DATETIME(:last_major_cashout, 'unixepoch')
+  );
+       `;
+        try {
+            const stmt = db.prepare(sql);
+            stmt.run({
+                player_username: this.#player_username,
+                balance: this.#cashout_balance,
+                last_major_cashout: this.#last_major_cashout,
+            });
+        } catch (err) {
+            throw err;
+        }
+    }
     cashout() {
         const sqlUpdateCashoutWithinADay = `
 UPDATE cashout

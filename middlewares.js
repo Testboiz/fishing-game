@@ -7,6 +7,8 @@ const redis = require("redis");
 const myUtils = require("./utils");
 
 const Inventory = require("./models/inventory");
+const Player = require("./models/player.js");
+const Cashout = require("./models/player-cashout.js");
 
 const middleware = {};
 
@@ -78,39 +80,28 @@ middleware.playerRegisterMiddleware = function registerPlayerMiddleware(req, res
             player_display_name: req.query.player_display_name
         };
         myUtils.ensureParametersOrValueNotNull(params);
-        const sql = `SELECT player_username FROM player WHERE player_username = ?`;
-        const stmt = db.prepare(sql);
-        const rows = stmt.get(params.player_username);
 
-        if (rows) {
-            if (rows.player_display_name === params.player_display_name) {
+        const player = Player.fromDB(params.player_username);
+
+        if (player) {
+            if (player.player_display_name === params.player_display_name) {
                 next();
             }
             else {
-                const sqlUpdate = `UPDATE player SET player_display_name = ? WHERE player_username = ?`;
-                const stmtUpdate = db.prepare(sqlUpdate);
-                stmtUpdate.run(params.player_display_name, params.player_username);
+                player.player_display_name = params.player_display_name;
+                player.changeDisplayName();
                 next();
             }
         }
         else {
-            const sqlInsert = `
-INSERT INTO player
-(player_username, player_display_name) 
-VALUES (?,?)`;
-            const sqlAddCashout = "INSERT INTO cashout (player_username) VALUES (?)";
-            const sqlAddRank = "INSERT INTO rank_overall (player_username) VALUES (?)";
-
+            const newPlayer = new Player(params.player_username, params.player_display_name);
             const newInventory = new Inventory({ player_username: params.player_username });
+            const newCashout = new Cashout({ player_username: params.player_username });
 
-            const stmtInsert = db.prepare(sqlInsert);
-            const stmtAddCashout = db.prepare(sqlAddCashout);
-            const stmtAddRank = db.prepare(sqlAddRank);
             const insertPlayerTransaction = db.transaction(function () {
-                stmtInsert.run(params.player_username, params.player_display_name);
-                stmtAddCashout.run(params.player_username);
-                stmtAddRank.run(params.player_username);
+                newPlayer.addToDB();
                 newInventory.addToDB();
+                newCashout.addToDB();
             });
             insertPlayerTransaction();
             next();
