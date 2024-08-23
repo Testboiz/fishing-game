@@ -125,6 +125,43 @@ WHERE buoy_uuid = :buoy_uuid;
             throw err;
         }
     }
+    #addSpookRecord(buoy_uuid, player_username) {
+        const sql = `
+INSERT INTO buoy_casts 
+(buoy_uuid, player_username, casts)
+VALUES
+(?,?,0)`;
+        try {
+            db.prepare(sql).run(buoy_uuid, player_username);
+        } catch (err) {
+            throw err;
+        }
+    }
+    getCastsAndSpookTime(buoy_uuid, player_username) {
+        const sql = `
+SELECT casts, previous_spook_time FROM buoy_casts
+WHERE buoy_uuid = ? AND player_username = ?;`;
+        try {
+            const stmt = db.prepare(sql);
+            const rows = stmt.get(buoy_uuid, player_username);
+            if (rows) {
+                return {
+                    casts: rows.casts,
+                    previous_spook_time: rows.previous_spook_time
+                };
+            }
+            else {
+                this.#addSpookRecord(buoy_uuid, player_username);
+                const newRows = stmt.get(buoy_uuid, player_username);
+                return {
+                    casts: newRows.casts,
+                    previous_spook_time: newRows.previous_spook_time
+                };
+            }
+        } catch (err) {
+            throw err;
+        }
+    }
     updateAfterCast(fishValue, player_username) {
         const sqlBuoyUpdate = `
 UPDATE buoy 
