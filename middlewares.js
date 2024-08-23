@@ -6,7 +6,7 @@ const CONSTANTS = require("./singletons/constants");
 const redis = require("redis");
 const myUtils = require("./utils");
 
-const Inventory = require("./inventory");
+const Inventory = require("./models/inventory");
 
 const middleware = {};
 
@@ -43,22 +43,6 @@ WHERE buoy_uuid = ? AND player_username = ?;`;
         }
     } catch (err) {
         myUtils.handleError(err, res);
-    }
-}
-
-function buoyLogin(res, buoy_uuid, rod_uuid, player_username) {
-    try {
-        const query = "UPDATE rod_info SET buoy_fished = ? WHERE rod_uuid = ? ";
-        myUtils.ensureParametersOrValueNotNull(buoy_uuid);
-        const stmt = db.prepare(query);
-        stmt.run(buoy_uuid, rod_uuid);
-        if (checkSpook(res, buoy_uuid, player_username)) {
-            return true; // success
-        } else {
-            return false; // fail
-        }
-    } catch (err) {
-        throw err;
     }
 }
 
@@ -112,8 +96,8 @@ middleware.playerRegisterMiddleware = function registerPlayerMiddleware(req, res
         else {
             const sqlInsert = `
 INSERT INTO player
-(player_username, player_display_name, linden_balance) 
-VALUES (?,?,0)`;
+(player_username, player_display_name) 
+VALUES (?,?)`;
             const sqlAddCashout = "INSERT INTO cashout (player_username) VALUES (?)";
             const sqlAddRank = "INSERT INTO rank_overall (player_username) VALUES (?)";
 
@@ -155,10 +139,9 @@ middleware.castMiddleware = async function castCacheMiddleware(req, res, next) {
             !valueObject ||
             valueObject.currentBuoy !== params.buoy_uuid
         ) {
-            let loginStatus = buoyLogin(
+            let loginStatus = checkSpook(
                 res,
                 params.buoy_uuid,
-                params.rod_uuid,
                 params.player_username
             );
             let castInfo = getCastsAndSpookTime(
@@ -226,9 +209,9 @@ middleware.fishpotMiddleware = function fishpotMiddleware(req, res, next) {
     const sqlGetFishpot = `SELECT fishpot, buoy_location_name FROM buoy WHERE buoy_uuid = ?`;
     const sqlResetFishpot = `UPDATE buoy SET fishpot = 0 WHERE buoy_uuid = ?`;
     const sqlUpdateAfterFishpot = `
-UPDATE player 
+UPDATE cashout 
 SET 
-    linden_balance = linden_balance + ?
+    balance = balance + ?
     WHERE player_username = ?;
     `;
     try {

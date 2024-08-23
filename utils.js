@@ -97,6 +97,13 @@ utils.roundToFixed = function roundToFixed(numberLike, digits = 2) {
     return number.toFixed(digits);
 };
 
+utils.isWithinADay = function isWithinADay(date) {
+    const now = Date.now();
+    const dateMs = date.getTime();
+    const remainingTime = now - dateMs;
+    return (remainingTime < CONSTANTS.MILISECONDS_IN_DAY);
+};
+
 utils.isNotNullOrUndefined = (obj) => { return (typeof obj !== 'undefined' && obj !== null); };
 
 module.exports = utils;

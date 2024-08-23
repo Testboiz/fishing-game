@@ -8,7 +8,7 @@ const myUtils = require("./utils");
 const db = require("./singletons/db");
 const CONSTANTS = require("./singletons/constants");
 
-const Inventory = require("./inventory");
+const Inventory = require("./models/inventory");
 
 const client = redis.createClient();
 client.connect().then();
@@ -51,7 +51,7 @@ Gold : ${inventoryInfo.inventory._gold}
 You caught ${fishCaught.fish_name}
 Fishing Exp: ${rankInfo.xp} (+1)
 Fish: ${inventoryInfo.inventory._fish}
-Your Earnings: ${rankInfo.linden_balance} L$ (+${fishCaught.fish_value}) 
+Your Earnings: ${rankInfo.balance} L$ (+${fishCaught.fish_value}) 
 Rank Extras!: Coming Soon!
 Kingdoms Coming Soon! 
 
@@ -265,9 +265,9 @@ function setWormType(worm_type) {
 
 function updateAfterCast(req, fish_value_multiplied, rod_type, res) {
     const sqlUpdateAfterCast = `
-UPDATE player 
+UPDATE cashout 
 SET 
-    linden_balance = linden_balance + ?
+    balance = balance + ?
     WHERE player_username = ?;
     `;
     const sqlForUpdateRank = `UPDATE rank_overall  SET xp = xp + ? WHERE player_username = ?; `;
@@ -279,7 +279,7 @@ SET
     };
 
     try {
-        const inventory = Inventory.fromDB(req.params.player_username);
+        const inventory = new Inventory(req.params.player_username);
 
         const firstLottery = runLottery(res);
         const secondLottery = runLottery(res);
@@ -380,16 +380,15 @@ UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?
 
 function getCashoutInfo(player_username, res) {
     const sqlCashoutInfo = `
-SELECT cashout.cashout_budget, cashout.last_major_cashout, player.linden_balance, cashout_values.cashout_value
+SELECT cashout.cashout_budget, cashout.last_major_cashout, cashout.balance, cashout_values.cashout_value
 FROM cashout 
-INNER JOIN player ON cashout.player_username = player.player_username
 INNER JOIN cashout_values ON cashout.cashout_type = cashout_values.cashout_type
 WHERE cashout.player_username = ?
 `;
 
     try {
         const cashoutInfo = db.prepare(sqlCashoutInfo).get(player_username);
-        const balance = Number(cashoutInfo.linden_balance);
+        const balance = Number(cashoutInfo.balance);
         const majorCashoutTime = myUtils.sqlToJSDateUTC(cashoutInfo.last_major_cashout);
         const cashoutBudget = Number(cashoutInfo.cashout_budget);
         const cashoutMaxValue = Number(cashoutInfo.cashout_value);
@@ -414,7 +413,7 @@ WHERE cashout.player_username = ?
 
 function resetCashout(player_username, res) {
     const sqlUpdatePlayerTableAfterCashout = `
-    UPDATE player SET linden_balance = linden_balance - ? 
+    UPDATE cashout SET balance = balance - ? 
     WHERE player_username = ?`;
     const sqlUpdateCashoutTableAfterCashoutOverADay = `
 UPDATE cashout
@@ -513,7 +512,7 @@ router.post("/rod/add-worms", function (req, res) {
     }
 });
 
-router.post("/buoy", middlewares.playerRegisterMiddleware, function (req, res) {
+router.post("/buoy/register", middlewares.playerRegisterMiddleware, function (req, res) {
     const params = {
         buoy_uuid: req.query.buoy_uuid,
         buoy_color: req.query.buoy_color,
@@ -591,7 +590,7 @@ UPDATE cashout
     WHERE cashout.player_username = :username
     `;
     const sqlUpdatePlayerTableAfterCashout = `
-    UPDATE player SET linden_balance = linden_balance - ? 
+    UPDATE cashout SET balance = balance - ? 
     WHERE player_username = ?`;
     const sqlUpdateCashoutTableAfterCashoutOverADay = `
 UPDATE cashout
@@ -724,18 +723,19 @@ WITH ranked_fishers AS (
 SELECT
     rank_overall.player_username,
     player.player_display_name,
-    player.linden_balance,
+    cashout.balance,
     rank_overall.xp,
     RANK() OVER (ORDER BY rank_overall.xp DESC) AS rank
 FROM
     rank_overall
 LEFT JOIN 
-    player ON rank_overall.player_username = player.player_username
+    player ON rank_overall.player_username = player.player_username,
+    cashout ON rank_overall.player_username = cashout.player_username
 )
 SELECT
     ro1.player_username,
     ro1.player_display_name,
-    ro1.linden_balance,
+    ro1.balance,
     ro1.xp,
     ro1.rank,
     ro2.player_display_name AS above_display_name,
@@ -841,7 +841,7 @@ INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
             fish: inventoryInfo.inventory._fish,
             debugCast: fishCaught.casts,
             earnings: {
-                linden_balance: rankInfo.linden_balance,
+                balance: rankInfo.balance,
                 fish_value: fish_value_multiplied,
             },
             rank_info: {

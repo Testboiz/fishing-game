@@ -30,6 +30,11 @@ const constants = {
             SHARK: 5,
             COMP_1: 6, // maybe unused, only for compartibility 
             COMP_2: 7
+        },
+        BUOY_COLOR: {
+            BLUE: "blue",
+            YELLOW: "yellow",
+            RED: "red"
         }
     },
     TIMEOUT: {
