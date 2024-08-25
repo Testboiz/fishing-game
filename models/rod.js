@@ -103,6 +103,16 @@ WHERE rod_uuid = ?;`;
             throw err;
         }
     }
+
+    authenticate(player_username) {
+        const sql = "SELECT * FROM rod_info WHERE rod_uuid = ? AND player_username = ?";
+        try {
+            const result = db.prepare(sql).get(this.#rod_uuid, player_username);
+            return (result != null);
+        } catch (err) {
+            throw err;
+        }
+    }
     add_small_worms(small_worms) {
         this.#small_worms = this.#small_worms + small_worms;
     }

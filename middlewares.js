@@ -8,7 +8,8 @@ const myUtils = require("./utils");
 
 const Inventory = require("./models/inventory");
 const Player = require("./models/player.js");
-const Cashout = require("./models/player-cashout.js");
+const Balance = require("./models/player-cashout.js");
+const Buoy = require("./models/buoy.js");
 
 const middleware = {};
 
@@ -73,6 +74,20 @@ function checkSpook(res, buoy_uuid, player_username) {
     }
 }
 
+function generateFishpotMessage(player_username, numberString, location) {
+    let msg = `
+=============================
+FISHPOT WINNER 
+
+Congratulations to ${player_username}
+That has won the ${numberString} L$ fishpot of this buoy 
+In ${location}
+=============================
+    `;
+    console.log(numberString);
+    return msg;
+}
+
 middleware.playerRegisterMiddleware = function registerPlayerMiddleware(req, res, next) {
     try {
         const params = {
@@ -96,12 +111,12 @@ middleware.playerRegisterMiddleware = function registerPlayerMiddleware(req, res
         else {
             const newPlayer = new Player(params.player_username, params.player_display_name);
             const newInventory = new Inventory({ player_username: params.player_username });
-            const newCashout = new Cashout({ player_username: params.player_username });
+            const newBalance = new Balance({ player_username: params.player_username });
 
             const insertPlayerTransaction = db.transaction(function () {
                 newPlayer.addToDB();
                 newInventory.addToDB();
-                newCashout.addToDB();
+                newBalance.addToDB();
             });
             insertPlayerTransaction();
             next();
@@ -197,54 +212,21 @@ middleware.timeoutMiddleware = async function timeoutMiddleware(req, res, next) 
 };
 
 middleware.fishpotMiddleware = function fishpotMiddleware(req, res, next) {
-    const sqlGetFishpot = `SELECT fishpot, buoy_location_name FROM buoy WHERE buoy_uuid = ?`;
-    const sqlResetFishpot = `UPDATE buoy SET fishpot = 0 WHERE buoy_uuid = ?`;
-    const sqlUpdateAfterFishpot = `
-UPDATE cashout 
-SET 
-    balance = balance + ?
-    WHERE player_username = ?;
-    `;
     try {
-        let fishpotInfo, msg;
-        const fishpotTransaction = db.transaction(function (callback) {
-            // preparation is here to minimize database use
-            const stmtGetFishpot = db.prepare(sqlGetFishpot);
-            const stmtResetFishpot = db.prepare(sqlResetFishpot);
-            const stmtUpdateAfterFishpot = db.prepare(sqlUpdateAfterFishpot);
+        const balanceManager = Balance.fromDB(req.params.player_username);
+        const buoyManager = Buoy.fromDB(req.params.buoy_uuid);
 
-            fishpotInfo = stmtGetFishpot.get(req.params.buoy_uuid);
-
-            const numberString = myUtils.roundToFixed(fishpotInfo.fishpot);
-
-            if (fishpotNumber < CONSTANTS.FISHPOT_MINIMUM) {
-                return callback("Fishpot Too Low");
-            }
-            stmtResetFishpot.run(req.params.buoy_uuid);
-            stmtUpdateAfterFishpot.run(fishpotInfo.fishpot, req.params.player_username);
-
-            msg = `
-=============================
-FISHPOT WINNER 
-
-Congratulations to ${req.params.player_username}
-That has won the ${numberString} L$ fishpot of this buoy 
-In ${fishpotInfo.buoy_location_name}
-=============================
-    `;
-            callback(null);
-        });
-        const rng = Math.random();
-        if (rng < CONSTANTS.FISHPOT_RATE) {
-            fishpotTransaction(function (status) {
-                if (status === "Fishpot Too Low") {
-                    return next();
-                }
-                else {
-                    return res.json(myUtils.generateJSONSkeleton(msg));
-                }
-            });
-            return;
+        if (
+            Math.random() < CONSTANTS.FISHPOT_RATE &&
+            buoyManager.fishpot > CONSTANTS.FISHPOT_MINIMUM
+        ) {
+            const fishpotString = buoyManager.getFishpot(balanceManager);
+            const fishpotMessage = generateFishpotMessage(
+                req.params.player_username,
+                fishpotString,
+                buoyManager.buoy_location_name
+            );
+            return res.json(myUtils.generateJSONSkeleton(fishpotMessage));
         }
         else {
             return next();

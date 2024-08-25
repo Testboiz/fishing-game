@@ -1,5 +1,6 @@
 const CONSTANTS = require("../singletons/constants");
-const db = require("./singletons/db");
+const db = require("../singletons/db");
+const myUtils = require("../utils");
 
 class Buoy {
     #buoy_uuid;
@@ -59,12 +60,12 @@ INSERT INTO buoy (
     buoy_color
   )
 VALUES (
-    ':buoy_uuid',
+    :buoy_uuid,
     :buoy_balance,
     :fishpot,
-    ':buoy_location_name',
+    :buoy_location_name,
     :buoy_multiplier,
-    ':buoy_color'
+    :buoy_color
   );`;
         try {
             const stmt = db.prepare(sql);
@@ -82,14 +83,14 @@ VALUES (
         }
     }
 
-    updateDB() {
+    updateToDB() {
         const sql = `
 UPDATE buoy
 SET
-    buoy_balance = :buoy_balance
-    fishpot = :fishpot
-    buoy_location_name = :buoy_location_name
-    buoy_multiplier = :buoy_multiplier
+    buoy_balance = :buoy_balance,
+    fishpot = :fishpot,
+    buoy_location_name = :buoy_location_name,
+    buoy_multiplier = :buoy_multiplier,
     buoy_color = :buoy_color
 WHERE buoy_uuid = :buoy_uuid;
 `;
@@ -182,6 +183,23 @@ INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
                 stmtCastUpdate.run(player_username);
             });
             updateAfterCastTransaction();
+        } catch (err) {
+            throw err;
+        }
+    }
+
+    getFishpot(Balance) {
+        try {
+            const fishpotValue = this.#fishpot;
+            const fishpotString = myUtils.roundToFixed(fishpotValue);
+
+            this.#fishpot = 0;
+            const commitChanges = db.transaction(function (buoyObject) {
+                buoyObject.updateToDB();
+                Balance.addBalance(fishpotValue);
+            });
+            commitChanges(this);
+            return fishpotString;
         } catch (err) {
             throw err;
         }

@@ -14,7 +14,7 @@ const client = redis.createClient();
 client.connect().then();
 
 
-function generateLotteryMessage(lotteryType) {
+function generateLotteryMessage(lotteryType) {  // model
     const lotteryMessage = "Fish Lottery:\n";
     switch (lotteryType) {
         case "alacrity":
@@ -34,7 +34,7 @@ function generateLotteryMessage(lotteryType) {
 }
 
 // Helper function to handle the complexity of multiline string handling
-function generateResponseString(fishCaught, rodInfo, rankInfo, inventoryInfo) {
+function generateResponseString(fishCaught, rodInfo, rankInfo, inventoryInfo) { // view
     var strArray = [
         `
 Small Worms: ${rodInfo.small_worms}
@@ -70,7 +70,7 @@ Rank (overall):  ${rankInfo.rank}
     return strArray.join("\n");
 }
 
-function calculateTax(res, buoy_uuid) {
+function calculateTax(res, buoy_uuid) { // model
     try {
         const stmt = db.prepare("SELECT buoy_color FROM buoy WHERE buoy_uuid = ?");
         const color = stmt.get(buoy_uuid);
@@ -90,12 +90,12 @@ function calculateTax(res, buoy_uuid) {
     }
 }
 
-function __setRedisCastCacheCallback(err, reply) {
+function __setRedisCastCacheCallback(err, reply) { // controller
     if (err) throw err;
     console.log(reply);
 }
 
-function setRedisCastCache(buoy_uuid, rod_uuid, worm_type, {
+function setRedisCastCache(buoy_uuid, rod_uuid, worm_type, { // controller
     alacrity = false,
     shubbie = false,
     shubbieType = "blue"
@@ -160,7 +160,7 @@ function setRedisCastCache(buoy_uuid, rod_uuid, worm_type, {
     }
 }
 
-function runLottery(res) {
+function runLottery(res) {  // model
     try {
         const sql = `
 SELECT name 
@@ -188,7 +188,7 @@ LIMIT 1;
     }
 };
 
-function getBaseXP(rod_type) {
+function getBaseXP(rod_type) {  // model
     const ROD_TYPES = CONSTANTS.ENUMS.ROD;
     const BASE_XP = CONSTANTS.BASE_XP;
     switch (rod_type) {
@@ -211,7 +211,7 @@ function getBaseXP(rod_type) {
     }
 }
 
-function computeXP(xpLotteryTriggers, rod_type, res) {
+function computeXP(xpLotteryTriggers, rod_type, res) {  // model
     try {
         var eXP = getBaseXP(rod_type);
         const currentTime = new Date();
@@ -229,7 +229,7 @@ function computeXP(xpLotteryTriggers, rod_type, res) {
     }
 }
 
-function executeLotteries(stmtLottery, rod_uuid, shubbie_uuid) {
+function executeLotteries(stmtLottery, rod_uuid, shubbie_uuid) { // controller?
     for (const key in stmtLottery.inventory) {
         if (stmtLottery.inventory.hasOwnProperty(key)) {
             const item = stmtLottery.inventory[key];
@@ -248,7 +248,7 @@ function executeLotteries(stmtLottery, rod_uuid, shubbie_uuid) {
     }
 }
 
-function setWormType(worm_type) {
+function setWormType(worm_type) {  // ??
     switch (worm_type) {
         case 1:
             return "Small Worms";
@@ -263,7 +263,7 @@ function setWormType(worm_type) {
     }
 }
 
-function updateAfterCast(req, fish_value_multiplied, rod_type, res) {
+function updateAfterCast(req, fish_value_multiplied, rod_type, res) {  // controller, may not be needed
     const sqlUpdateAfterCast = `
 UPDATE cashout 
 SET 
@@ -378,7 +378,7 @@ UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?
     }
 }
 
-function getCashoutInfo(player_username, res) {
+function getCashoutInfo(player_username, res) {  // model
     const sqlCashoutInfo = `
 SELECT cashout.cashout_budget, cashout.last_major_cashout, cashout.balance, cashout_values.cashout_value
 FROM cashout 
@@ -411,7 +411,7 @@ WHERE cashout.player_username = ?
     }
 }
 
-function resetCashout(player_username, res) {
+function resetCashout(player_username, res) {  // model (unused)
     const sqlUpdatePlayerTableAfterCashout = `
     UPDATE cashout SET balance = balance - ? 
     WHERE player_username = ?`;

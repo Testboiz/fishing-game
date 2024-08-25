@@ -3,9 +3,9 @@ const db = require("../singletons/db");
 const CONSTANTS = require("../singletons/constants");
 const myUtils = require("../utils");
 
-class Cashout {
+class Balance {
     #player_username;
-    #cashout_balance;
+    #balance;
     #cashout_quota;
     #last_major_cashout;
     #maximum_cashout_value;
@@ -13,13 +13,13 @@ class Cashout {
 
     constructor({
         player_username = "",
-        cashout_balance = 0,
+        balance = 0,
         cashout_quota = CONSTANTS.CASHOUT_DEFAULT_VALUE,
         last_major_cashout = Math.floor(Date.now() / CONSTANTS.MILISECONDS_IN_SECOND),
         maximum_cashout_value = CONSTANTS.CASHOUT_DEFAULT_VALUE
     }) {
         this.#player_username = player_username;
-        this.#cashout_balance = cashout_balance;
+        this.#balance = balance;
         this.#cashout_quota = cashout_quota;
         this.#last_major_cashout = last_major_cashout;
         this.#maximum_cashout_value = maximum_cashout_value;
@@ -35,9 +35,9 @@ WHERE cashout.player_username = ?
 
         try {
             const cashoutInfo = db.prepare(sqlCashoutInfo).get(player_username);
-            return new Cashout({
+            return new Balance({
                 player_username: player_username,
-                cashout_balance: Number(cashoutInfo.balance),
+                balance: Number(cashoutInfo.balance),
                 cashout_quota: Math.min(cashoutInfo.balance, Number(cashoutInfo.cashout_budget)),
                 last_major_cashout: myUtils.sqlToJSDateUTC(cashoutInfo.last_major_cashout),
                 maximum_cashout_value: Number(cashoutInfo.cashout_value)
@@ -65,13 +65,28 @@ VALUES (
             const stmt = db.prepare(sql);
             stmt.run({
                 player_username: this.#player_username,
-                balance: this.#cashout_balance,
+                balance: this.#balance,
                 last_major_cashout: this.#last_major_cashout,
             });
         } catch (err) {
             throw err;
         }
     }
+    addBalance(addedBalance) {
+        const sql = `
+UPDATE cashout 
+SET 
+    balance = balance + ?
+    WHERE player_username = ?;
+    `;
+        try {
+            const stmt = db.prepare(sql);
+            stmt.run(Number(addedBalance), this.#player_username);
+        } catch (err) {
+            throw err;
+        }
+    }
+
     cashout() {
         const sqlUpdateCashoutWithinADay = `
 UPDATE cashout
@@ -98,12 +113,12 @@ UPDATE cashout
             const stmtUpdateCashoutWithinADay = db.prepare(sqlUpdateCashoutWithinADay);
             const stmtUpdateCashoutOverADay = db.prepare(sqlUpdateCashoutOverADay);
             const isWithinADay = myUtils.isWithinADay(this.#last_major_cashout);
-            const remainingBalanceOverADay = this.#cashout_balance - this.#maximum_cashout_value;
-            const remainingBalanceWithinADay = this.#cashout_balance - this.#cashout_quota;
-            if (Math.floor(this.#cashout_balance) === 0) {
+            const remainingBalanceOverADay = this.#balance - this.#maximum_cashout_value;
+            const remainingBalanceWithinADay = this.#balance - this.#cashout_quota;
+            if (Math.floor(this.#balance) === 0) {
                 return {
                     quota: 0,
-                    balanceToShow: myUtils.roundToFixed(this.#cashout_balance),
+                    balanceToShow: myUtils.roundToFixed(this.#balance),
                 };
             }
             else if (Math.floor(this.#cashout_quota) === 0) {
@@ -112,14 +127,14 @@ UPDATE cashout
                     const hh_mm_ss = myUtils.getHHMMSSFromMiliseconds(remainingMs);
                     return {
                         quota: 0,
-                        balanceToShow: myUtils.roundToFixed(this.#cashout_balance),
+                        balanceToShow: myUtils.roundToFixed(this.#balance),
                         remainingTime: hh_mm_ss
                     };
                 }
                 else {
                     stmtUpdateCashoutOverADay.run({
                         "username": this.#player_username,
-                        "cashout_amnount": Math.min(this.#cashout_balance, this.#maximum_cashout_value),
+                        "cashout_amnount": Math.min(this.#balance, this.#maximum_cashout_value),
                         "cashout_max_value": this.#maximum_cashout_value
                     });
                     const updatedRoundedBalance = myUtils.roundToFixed(remainingBalanceOverADay);
@@ -161,4 +176,4 @@ UPDATE cashout
     }
 }
 
-module.exports = Cashout;
+module.exports = Balance;

@@ -55,8 +55,8 @@ const constants = {
     CAST_LIMIT: 51,
     CASHOUT_DEFAULT_VALUE: 300,
     FISH_LOTTERY_RATE: 0.2,
-    FISHPOT_RATE: 0.01,
-    FISHPOT_MINIMUM: 30,
+    FISHPOT_RATE: 1,
+    FISHPOT_MINIMUM: 0,
     MILISECONDS_IN_DAY: 24 * 60 * 60 * 1000,
     MILISECONDS_IN_SECOND: 1000,
     TAX: 0.15, // temporal flat 15% tax
