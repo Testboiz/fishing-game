@@ -8,7 +8,7 @@ const myUtils = require("./utils");
 
 const Inventory = require("./models/inventory");
 const Player = require("./models/player.js");
-const Balance = require("./models/player-cashout.js").Balance;
+const Balance = require("./models/player-cashout.js");
 const Buoy = require("./models/buoy.js");
 
 const middleware = {};

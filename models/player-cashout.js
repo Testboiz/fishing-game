@@ -3,24 +3,7 @@ const db = require("../singletons/db");
 const CONSTANTS = require("../singletons/constants");
 const myUtils = require("../utils");
 
-class NoBalance {
-    constructor(residualBalance) {
-        this.residualBalance = myUtils.roundToFixed(residualBalance);
-    }
-}
-
-class OutOfQuota {
-    constructor(remainingTime) {
-        this.remainingTime = remainingTime;
-    }
-}
-
-class CashoutSuccess {
-    constructor(balanceTaken, remainingBalance) {
-        this.balanceTaken = myUtils.roundToFixed(balanceTaken);
-        this.remainingBalance = myUtils.roundToFixed(remainingBalance);
-    }
-}
+const { NoBalance, OutOfQuota, CashoutSuccess } = require("./cashout-status");
 
 class Balance {
     #player_username;
@@ -177,4 +160,4 @@ UPDATE cashout
     }
 }
 
-module.exports = { Balance, OutOfQuota, NoBalance, CashoutSuccess };
+module.exports = Balance;
