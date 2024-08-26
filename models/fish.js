@@ -23,7 +23,7 @@ FROM
         `;
         try {
             const stmt = db.prepare(sql);
-            const rows = stmt.aggregate(buoy_uuid);
+            const rows = stmt.get(buoy_uuid);
 
             this.fish_name = rows.fish_name;
             this.fish_value = rows.fish_value;

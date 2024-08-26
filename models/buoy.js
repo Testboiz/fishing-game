@@ -178,11 +178,11 @@ INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
         try {
             const stmtBuoyUpdate = db.prepare(sqlBuoyUpdate);
             const stmtCastUpdate = db.prepare(sqlCastUpdate);
-            const updateAfterCastTransaction = db.transaction(function () {
-                stmtBuoyUpdate.run(fishValue, fishValue * this.#buoy_multiplier, this.#buoy_uuid);
-                stmtCastUpdate.run(player_username);
+            const updateAfterCastTransaction = db.transaction(function (buoyObject, player_username) {
+                stmtBuoyUpdate.run(fishValue, fishValue * buoyObject.buoy_multiplier, buoyObject.buoy_uuid);
+                stmtCastUpdate.run(buoyObject.buoy_uuid, player_username);
             });
-            updateAfterCastTransaction();
+            updateAfterCastTransaction(this, player_username);
         } catch (err) {
             throw err;
         }
@@ -209,6 +209,9 @@ INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
     }
     getMultipliedFishValue(fish_value) {
         return this.#buoy_multiplier * fish_value;
+    }
+    get buoy_uuid() {
+        return this.#buoy_uuid;
     }
     get buoy_balance() {
         return this.#buoy_balance;

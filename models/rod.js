@@ -1,4 +1,7 @@
 const db = require("../singletons/db");
+const CONSTANTS = require("../singletons/constants");
+
+const myUtils = require("../utils");
 
 class Rod {
     #rod_uuid;
@@ -9,6 +12,7 @@ class Rod {
     #player_username;
     #alacrity_charges;
     #rod_type;
+    #selected_worm;
 
     constructor({
         rod_uuid,
@@ -18,7 +22,8 @@ class Rod {
         magic_worms = 0,
         player_username = "",
         alacrity_charges = 0,
-        rod_type = 1
+        rod_type = 1,
+        selected_worm = 1
     }) {
         this.#rod_uuid = rod_uuid;
         this.#small_worms = small_worms;
@@ -28,6 +33,7 @@ class Rod {
         this.#player_username = player_username;
         this.#alacrity_charges = alacrity_charges;
         this.#rod_type = rod_type;
+        this.#selected_worm = selected_worm;
     }
 
     static fromDB(rod_uuid) {
@@ -48,11 +54,34 @@ class Rod {
                 magic_worms: row.magic_worms,
                 player_username: row.player_username,
                 alacrity_charges: row.alacrity_charges,
-                rod_type: row.rod_type
+                rod_type: row.rod_type,
+                selected_worm: row.selected_worm
             });
         }
         catch (err) {
             throw err;
+        }
+    }
+    #getBaseXP() {
+        const ROD_TYPES = CONSTANTS.ENUMS.ROD;
+        const BASE_XP = CONSTANTS.BASE_XP;
+        switch (this.#rod_type) {
+            case ROD_TYPES.BEGINNER:
+                return BASE_XP.BEGINNER;
+            case ROD_TYPES.PRO:
+                return BASE_XP.PRO;
+            case ROD_TYPES.ENCHANTED:
+                return BASE_XP.ENCHANTED;
+            case ROD_TYPES.MACIC:
+                return BASE_XP.MAGIC;
+            case ROD_TYPES.SHARK:
+                return BASE_XP.SHARK;
+            case ROD_TYPES.COMP_1:
+                return BASE_XP.COMP_1;
+            case ROD_TYPES.COMP_2:
+                return BASE_XP.COMP_2;
+            default:
+                throw new Error("Invalid Rod");
         }
     }
     addToDB() {
@@ -130,8 +159,25 @@ SET
 WHERE rod_uuid = ?;`;
         try {
             const stmt = db.prepare(sql);
-            stmt.run(RodObject.rod_uuid());
-            return new Rod.fromDB(RodObject.rod_uuid());
+            stmt.run(RodObject.rod_uuid);
+            return Rod.fromDB(RodObject.rod_uuid);
+        } catch (err) {
+            throw err;
+        }
+    }
+
+    computeXP(xpLotteryTriggers) {
+        try {
+            var eXP = this.#getBaseXP();
+            const currentTime = new Date();
+            const isWeekend = myUtils.isWeekend(currentTime);
+
+            if (isWeekend) {
+                eXP = eXP * 3;
+            }
+            if (xpLotteryTriggers.first) eXP += 2;
+            if (xpLotteryTriggers.second) eXP += 2;
+            return eXP;
         } catch (err) {
             throw err;
         }
@@ -142,6 +188,23 @@ WHERE rod_uuid = ?;`;
         try {
             const result = db.prepare(sql).get(this.#rod_uuid, player_username);
             return (result != null);
+        } catch (err) {
+            throw err;
+        }
+    }
+    addLotteryWorms() {
+        const sql = `
+UPDATE rod_info
+SET
+    small_worms = CASE WHEN selected_worm = 1 THEN small_worms + 2 ELSE small_worms END,
+    tasty_worms = CASE WHEN selected_worm = 2 THEN tasty_worms + 2 ELSE tasty_worms END,
+    enchanted_worms = CASE WHEN selected_worm = 3 THEN enchanted_worms + 2 ELSE enchanted_worms END,
+    magic_worms = CASE WHEN selected_worm = 4 THEN magic_worms + 2 ELSE magic_worms END
+WHERE rod_uuid = ?
+        `;
+        try {
+            const stmt = db.prepare(sql);
+            stmt.run(this.#rod_uuid);
         } catch (err) {
             throw err;
         }
@@ -158,9 +221,12 @@ WHERE rod_uuid = ?;`;
     add_magic_worms(magic_worms) {
         this.#magic_worms = this.#magic_worms + magic_worms;
     }
+    add_alacrity_charges(alacrity_charges) {
+        this.#alacrity_charges = this.#alacrity_charges + alacrity_charges;
+    }
 
     get rod_uuid() {
-        return this.rod_uuid;
+        return this.#rod_uuid;
     }
     get small_worms() {
         return this.#small_worms;
@@ -176,6 +242,9 @@ WHERE rod_uuid = ?;`;
     }
     get alacrity_charges() {
         return this.#alacrity_charges;
+    }
+    get selected_worm() {
+        return this.#selected_worm;
     }
     set small_worms(small_worms) {
         this.#small_worms = small_worms;

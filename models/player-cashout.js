@@ -3,6 +3,25 @@ const db = require("../singletons/db");
 const CONSTANTS = require("../singletons/constants");
 const myUtils = require("../utils");
 
+class NoBalance {
+    constructor(residualBalance) {
+        this.residualBalance = myUtils.roundToFixed(residualBalance);
+    }
+}
+
+class OutOfQuota {
+    constructor(remainingTime) {
+        this.remainingTime = remainingTime;
+    }
+}
+
+class CashoutSuccess {
+    constructor(balanceTaken, remainingBalance) {
+        this.balanceTaken = myUtils.roundToFixed(balanceTaken);
+        this.remainingBalance = myUtils.roundToFixed(remainingBalance);
+    }
+}
+
 class Balance {
     #player_username;
     #balance;
@@ -113,35 +132,25 @@ UPDATE cashout
             const stmtUpdateCashoutWithinADay = db.prepare(sqlUpdateCashoutWithinADay);
             const stmtUpdateCashoutOverADay = db.prepare(sqlUpdateCashoutOverADay);
             const isWithinADay = myUtils.isWithinADay(this.#last_major_cashout);
-            const remainingBalanceOverADay = this.#balance - this.#maximum_cashout_value;
-            const remainingBalanceWithinADay = this.#balance - this.#cashout_quota;
+            const remainingBalanceOverADay = Math.max(this.#balance - this.#maximum_cashout_value, this.#balance % 1);
+            const remainingBalanceWithinADay = Math.max(this.#balance - this.#cashout_quota, this.#balance % 1);
             if (Math.floor(this.#balance) === 0) {
-                return {
-                    quota: 0,
-                    balanceToShow: myUtils.roundToFixed(this.#balance),
-                };
+                return new NoBalance(this.#balance);
             }
             else if (Math.floor(this.#cashout_quota) === 0) {
                 if (isWithinADay) {
-                    const remainingMs = cashoutInfo.remainingTimeMs;
+                    const remainingMs = myUtils.getRemainingMiliseconds(this.#last_major_cashout);
                     const hh_mm_ss = myUtils.getHHMMSSFromMiliseconds(remainingMs);
-                    return {
-                        quota: 0,
-                        balanceToShow: myUtils.roundToFixed(this.#balance),
-                        remainingTime: hh_mm_ss
-                    };
+                    return new OutOfQuota(hh_mm_ss);
                 }
                 else {
+                    const cashoutAmnount = Math.min(this.#balance, this.#maximum_cashout_value);
                     stmtUpdateCashoutOverADay.run({
                         "username": this.#player_username,
-                        "cashout_amnount": Math.min(this.#balance, this.#maximum_cashout_value),
+                        "cashout_amnount": cashoutAmnount,
                         "cashout_max_value": this.#maximum_cashout_value
                     });
-                    const updatedRoundedBalance = myUtils.roundToFixed(remainingBalanceOverADay);
-                    return {
-                        quota: this.#maximum_cashout_value,
-                        balanceToShow: updatedRoundedBalance,
-                    };
+                    return new CashoutSuccess(cashoutAmnount, this.#balance - cashoutAmnount);
                 }
             }
             else {
@@ -150,11 +159,7 @@ UPDATE cashout
                         "username": this.#player_username,
                         "cashout_amnount": this.#cashout_quota
                     });
-                    const updatedRoundedBalance = myUtils.roundToFixed(remainingBalanceWithinADay);
-                    return {
-                        quota: this.#cashout_quota,
-                        balanceToShow: updatedRoundedBalance,
-                    };
+                    return new CashoutSuccess(this.#cashout_quota, remainingBalanceWithinADay);
                 }
                 else {
                     stmtUpdateCashoutOverADay.run({
@@ -162,11 +167,7 @@ UPDATE cashout
                         "cashout_amnount": this.#cashout_quota,
                         "cashout_max_value": this.#maximum_cashout_value
                     });
-                    const updatedRoundedBalance = myUtils.roundToFixed(remainingBalanceOverADay);
-                    return {
-                        quota: this.#maximum_cashout_value,
-                        balanceToShow: updatedRoundedBalance,
-                    };
+                    return new CashoutSuccess(this.#maximum_cashout_value, remainingBalanceOverADay);
                 }
             }
         }
@@ -176,4 +177,4 @@ UPDATE cashout
     }
 }
 
-module.exports = Balance;
+module.exports = { Balance, OutOfQuota, NoBalance, CashoutSuccess };

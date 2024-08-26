@@ -9,32 +9,17 @@ const db = require("./singletons/db");
 const CONSTANTS = require("./singletons/constants");
 
 const Inventory = require("./models/inventory");
-const Player = require("./models/player");
 const Rod = require("./models/rod");
 const Buoy = require("./models/buoy");
+const Cashout = require("./models/player-cashout").Balance;
+const Fish = require("./models/fish");
+const Player = require("./models/player");
+const FishLottery = require("./models/lottery");
+const CashoutStatus = require("./models/player-cashout");
+
 
 const client = redis.createClient();
 client.connect().then();
-
-
-function generateLotteryMessage(lotteryType) {  // model
-    const lotteryMessage = "Fish Lottery:\n";
-    switch (lotteryType) {
-        case "alacrity":
-            return lotteryMessage + "You've won 5 Alacrity charges (fast cast)\n";
-        case "powder":
-            return lotteryMessage + "You've won 2 Magic Powder (Shubbies Pet Food)!\n";
-        case "xp":
-            return lotteryMessage + "You've won 2 Fishing Experience\n";
-        default:
-            if (lotteryType.includes("Worms")) {
-                return lotteryMessage + `You've won 2 ${lotteryType}!\n`;
-            }
-            else {
-                return "\n";
-            }
-    }
-}
 
 // Helper function to handle the complexity of multiline string handling
 function generateResponseString(fishCaught, rodInfo, rankInfo, inventoryInfo) { // view
@@ -67,30 +52,10 @@ Rank (overall):  ${rankInfo.rank}
             : `You are the top fisher!`,
         `\n`,
         `Rank (monthly):  Coming Soon!\n`,
-        (inventoryInfo.first) ? generateLotteryMessage(inventoryInfo.first) : "",
-        (inventoryInfo.second) ? generateLotteryMessage(inventoryInfo.second) : "",
+        (inventoryInfo.first) ? inventoryInfo.first.generateLotteryMessage() : "",
+        (inventoryInfo.second) ? inventoryInfo.second.generateLotteryMessage() : "",
     ];
     return strArray.join("\n");
-}
-
-function calculateTax(res, buoy_uuid) { // model
-    try {
-        const stmt = db.prepare("SELECT buoy_color FROM buoy WHERE buoy_uuid = ?");
-        const color = stmt.get(buoy_uuid);
-        switch (color.buoy_color) {
-            case "red":
-                return 0.5;
-            case "yellow":
-                return 0.75;
-            case "blue":
-                return 0.85;
-            default:
-                throw new Error("Unidentified Buoy Color");
-        }
-    }
-    catch (err) {
-        myUtils.handleError(err, res);
-    }
 }
 
 function __setRedisCastCacheCallback(err, reply) { // controller
@@ -163,94 +128,6 @@ function setRedisCastCache(buoy_uuid, rod_uuid, worm_type, { // controller
     }
 }
 
-function runLottery(res) {  // model
-    try {
-        const sql = `
-SELECT name 
-FROM fish_lottery 
-WHERE probability < ? 
-ORDER BY probability DESC 
-LIMIT 1;
-    `;
-        const prob = Math.random();
-        if (prob < CONSTANTS.FISH_LOTTERY_RATE) {
-            const stmt = db.prepare(sql);
-            let lotteryRow = stmt.get(prob);
-            if (lotteryRow) {
-                return lotteryRow.name;
-            }
-            else {
-                return null;
-            }
-        }
-        return null;
-    }
-    catch (err) {
-        myUtils.handleError(err, res);
-        return null;
-    }
-};
-
-function getBaseXP(rod_type) {  // model
-    const ROD_TYPES = CONSTANTS.ENUMS.ROD;
-    const BASE_XP = CONSTANTS.BASE_XP;
-    switch (rod_type) {
-        case ROD_TYPES.BEGINNER:
-            return BASE_XP.BEGINNER;
-        case ROD_TYPES.PRO:
-            return BASE_XP.PRO;
-        case ROD_TYPES.ENCHANTED:
-            return BASE_XP.ENCHANTED;
-        case ROD_TYPES.MACIC:
-            return BASE_XP.MAGIC;
-        case ROD_TYPES.SHARK:
-            return BASE_XP.SHARK;
-        case ROD_TYPES.COMP_1:
-            return BASE_XP.COMP_1;
-        case ROD_TYPES.COMP_2:
-            return BASE_XP.COMP_2;
-        default:
-            throw new Error("Invalid Rod");
-    }
-}
-
-function computeXP(xpLotteryTriggers, rod_type, res) {  // model
-    try {
-        var eXP = getBaseXP(rod_type);
-        const currentTime = new Date();
-        const isWeekend = myUtils.isWeekend(currentTime);
-
-        if (isWeekend) {
-            eXP = eXP * 3;
-        }
-        if (xpLotteryTriggers.first) eXP += 2;
-        if (xpLotteryTriggers.second) eXP += 2;
-        return eXP;
-    } catch (err) {
-        myUtils.handleError(err, res);
-        return null;
-    }
-}
-
-function executeLotteries(stmtLottery, rod_uuid, shubbie_uuid) { // controller?
-    for (const key in stmtLottery.inventory) {
-        if (stmtLottery.inventory.hasOwnProperty(key)) {
-            const item = stmtLottery.inventory[key];
-            if (item && typeof item.run === 'function') {
-                if (key) item.run(rod_uuid);
-            }
-        }
-    }
-    for (const key in stmtLottery.shubbie) {
-        if (stmtLottery.inventory.hasOwnProperty(key)) {
-            const item = stmtLottery.inventory[key];
-            if (item && typeof item.run === 'function') {
-                if (key) item.run(shubbie_uuid);
-            }
-        }
-    }
-}
-
 function setWormType(worm_type) {  // ??
     switch (worm_type) {
         case 1:
@@ -267,53 +144,31 @@ function setWormType(worm_type) {  // ??
 }
 
 function updateAfterCast(req, fish_value_multiplied, rod_type, res) {  // controller, may not be needed
-    const sqlUpdateAfterCast = `
-UPDATE cashout 
-SET 
-    balance = balance + ?
-    WHERE player_username = ?;
-    `;
-    const sqlForUpdateRank = `UPDATE rank_overall  SET xp = xp + ? WHERE player_username = ?; `;
-
-    const inventoryInfo = {}, lotterySQL = {}, xpTriggers = {}, inventoryObject = {};
-    const stmtLottery = {
-        inventory: {},
-        shubbie: {}
-    };
+    const inventoryInfo = {}, xpTriggers = {}, inventoryObject = {};
 
     try {
         const inventory = Inventory.fromDB(req.params.player_username);
+        const balance = Cashout.fromDB(req.params.player_username);
+        const player = Player.fromDB(req.params.player_username);
+        const rod = Rod.fromDB(req.params.rod_uuid);
 
-        const firstLottery = runLottery(res);
-        const secondLottery = runLottery(res);
+        const firstLottery = new FishLottery();
+        const secondLottery = new FishLottery();
 
         inventoryInfo.first = firstLottery;
         inventoryInfo.second = secondLottery;
-
-        const stmtupdateAfterCast = db.prepare(sqlUpdateAfterCast);
-        const stmtForUpdateRank = db.prepare(sqlForUpdateRank);
 
         inventory.addGold(1);
         inventory.addFish(1);
 
         switch (firstLottery) {
             case "worm":
-                lotterySQL.firstSQL = `
-UPDATE rod_info
-SET
-    small_worms = CASE WHEN selected_worm = 1 THEN small_worms + 2 ELSE small_worms END,
-    tasty_worms = CASE WHEN selected_worm = 2 THEN tasty_worms + 2 ELSE tasty_worms END,
-    enchanted_worms = CASE WHEN selected_worm = 3 THEN enchanted_worms + 2 ELSE enchanted_worms END,
-    magic_worms = CASE WHEN selected_worm = 4 THEN magic_worms + 2 ELSE magic_worms END
-WHERE rod_uuid = ?
-                    `;
+                rod.addLotteryWorms();
                 inventoryInfo.first = setWormType(req.params.worm_type);
                 break;
             case "alacrity":
                 if (rod_type > CONSTANTS.ENUMS.ROD.ENCHANTED) {
-                    lotterySQL.firstSQL = `
-UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?
-                `;
+                    rod.add_alacrity_charges(5);
                 }
                 break;
             case "powder":
@@ -325,22 +180,12 @@ UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?
         }
         switch (secondLottery) {
             case "worm":
-                lotterySQL.secondSQL = `
-UPDATE rod_info
-SET
-    small_worms = CASE WHEN selected_worm = 1 THEN small_worms + 2 ELSE small_worms END,
-    tasty_worms = CASE WHEN selected_worm = 2 THEN tasty_worms + 2 ELSE tasty_worms END,
-    enchanted_worms = CASE WHEN selected_worm = 3 THEN enchanted_worms + 2 ELSE enchanted_worms END,
-    magic_worms = CASE WHEN selected_worm = 4 THEN magic_worms + 2 ELSE magic_worms END
-WHERE rod_uuid = ?
-                    `;
+                rod.addLotteryWorms();
                 inventoryInfo.second = setWormType(req.params.worm_type);
                 break;
             case "alacrity":
                 if (rod_type > CONSTANTS.ENUMS.ROD.ENCHANTED) {
-                    lotterySQL.secondSQL = `
-UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?
-                `;
+                    rod.add_alacrity_charges(5);
                 }
                 break;
             case "powder":
@@ -351,22 +196,10 @@ UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?
                 break;
         }
 
-        if (lotterySQL.firstSQL) stmtLottery.inventory.first = db.prepare(lotterySQL.firstSQL);
-        if (lotterySQL.secondSQL) stmtLottery.inventory.second = db.prepare(lotterySQL.secondSQL);
-
         const updateAfterCastTransaction = db.transaction(function () {
-            stmtForUpdateRank.run(
-                computeXP(xpTriggers, rod_type, res),
-                req.params.player_username
-            );
-
-            stmtupdateAfterCast.run(
-                fish_value_multiplied,
-                req.params.player_username
-            );
-
-            executeLotteries(stmtLottery, req.params.rod_uuid);
-
+            player.addXP(rod.computeXP(xpTriggers));
+            balance.addBalance(fish_value_multiplied);
+            rod.updateToDB();
             inventory.updateDB();
         });
         updateAfterCastTransaction();
@@ -378,68 +211,6 @@ UPDATE rod_info SET alacrity_charges = alacrity_charges + 5 WHERE rod_uuid = ?
     }
     catch (err) {
         throw err;
-    }
-}
-
-function getCashoutInfo(player_username, res) {  // model
-    const sqlCashoutInfo = `
-SELECT cashout.cashout_budget, cashout.last_major_cashout, cashout.balance, cashout_values.cashout_value
-FROM cashout 
-INNER JOIN cashout_values ON cashout.cashout_type = cashout_values.cashout_type
-WHERE cashout.player_username = ?
-`;
-
-    try {
-        const cashoutInfo = db.prepare(sqlCashoutInfo).get(player_username);
-        const balance = Number(cashoutInfo.balance);
-        const majorCashoutTime = myUtils.sqlToJSDateUTC(cashoutInfo.last_major_cashout);
-        const cashoutBudget = Number(cashoutInfo.cashout_budget);
-        const cashoutMaxValue = Number(cashoutInfo.cashout_value);
-        const remainingTimeMs = myUtils.getRemainingMiliseconds(majorCashoutTime);
-        const absoluteRemainingTime = Math.abs(remainingTimeMs);
-
-        const isWithinADay = (absoluteRemainingTime < CONSTANTS.MILISECONDS_IN_DAY) ? true : false;
-
-        return {
-            balance: balance,
-            budget: Math.min(Math.floor(balance), cashoutBudget),
-            maxValue: cashoutMaxValue,
-            isWithinADay: isWithinADay,
-            remainingTimeMs: absoluteRemainingTime
-        };
-    }
-    catch (err) {
-        myUtils.handleError(err, res);
-        return null;
-    }
-}
-
-function resetCashout(player_username, res) {  // model (unused)
-    const sqlUpdatePlayerTableAfterCashout = `
-    UPDATE cashout SET balance = balance - ? 
-    WHERE player_username = ?`;
-    const sqlUpdateCashoutTableAfterCashoutOverADay = `
-UPDATE cashout
-    SET
-        cashout_budget = :cashout_max_value - :cashout_amnount,
-        last_major_cashout = DATETIME('now')
-    WHERE player_username = :username
-    `;
-    try {
-        const stmtUpdateCashoutTableAfterCashoutOverADay = db.prepare(sqlUpdateCashoutTableAfterCashoutOverADay);
-        const stmtUpdatePlayerTableAfterCashout = db.prepare(sqlUpdatePlayerTableAfterCashout);
-        const cashoutInfo = getCashoutInfo(player_username, res);
-        const cashoutAfterTimeLimit = db.transaction(function () {
-            stmtUpdateCashoutTableAfterCashoutOverADay.run({
-                "username": player_username,
-                "cashout_amnount": cashoutInfo.budget,
-                "cashout_max_value": cashoutInfo.maxValue
-            });
-            stmtUpdatePlayerTableAfterCashout.run(cashoutInfo.budget, player_username);
-        });
-        cashoutAfterTimeLimit();
-    } catch (err) {
-        myUtils.handleError(err, res);
     }
 }
 
@@ -577,88 +348,23 @@ router.post("/buoy/add-balance", function (req, res) {
 
 router.post("/cashout", function (req, res) {
     const player_username = req.query.player_username;
-    const sqlUpdateCashoutTableAfterCashoutWithinADay = `
-UPDATE cashout
-    SET
-    cashout_budget = cashout.cashout_budget - :cashout_amnount,
-    last_major_cashout =
-        CASE
-            WHEN cashout.cashout_budget - :cashout_amnount = 0
-            THEN DATETIME('now')
-            ELSE last_major_cashout
-        END
-    WHERE cashout.player_username = :username
-    `;
-    const sqlUpdatePlayerTableAfterCashout = `
-    UPDATE cashout SET balance = balance - ? 
-    WHERE player_username = ?`;
-    const sqlUpdateCashoutTableAfterCashoutOverADay = `
-UPDATE cashout
-    SET
-        cashout_budget = :cashout_max_value - :cashout_amnount,
-        last_major_cashout = DATETIME('now')
-    WHERE player_username = :username
-    `; // this would also reset the budget to the initial value
+
     try {
         myUtils.ensureParametersOrValueNotNull(player_username);
-        const cashoutInfo = getCashoutInfo(player_username, res);
-        const stmtUpdateCashoutTableAfterCashoutWithinADay = db.prepare(sqlUpdateCashoutTableAfterCashoutWithinADay);
-        const stmtUpdateCashoutTableAfterCashoutOverADay = db.prepare(sqlUpdateCashoutTableAfterCashoutOverADay);
-        const stmtUpdatePlayerTableAfterCashout = db.prepare(sqlUpdatePlayerTableAfterCashout);
 
-        const roundedBalance = myUtils.roundToFixed(cashoutInfo.budget);
-        if (Math.floor(cashoutInfo.balance) === 0) {
-            const msgNoBalance = `You need at least 1L$ to cashout \n You had ${roundedBalance} L$`;
+        const playerCashout = Cashout.fromDB(player_username);
+        const cashoutInfo = playerCashout.cashout();
+
+        if (cashoutInfo instanceof CashoutStatus.NoBalance) {
+            const msgNoBalance = `You need at least 1L$ to cashout \n You had ${cashoutInfo.residualBalance} L$`;
             res.status(CONSTANTS.HTTP.CONFLICT).json(myUtils.generateJSONSkeleton(msgNoBalance, CONSTANTS.HTTP.CONFLICT));
         }
-        else if (cashoutInfo.budget === 0) {
-            if (cashoutInfo.isWithinADay) {
-                const remainingMs = cashoutInfo.remainingTimeMs;
-                const hh_mm_ss = myUtils.getHHMMSSFromMiliseconds(remainingMs);
-                const msgLimit = `You have reached the cashout limit for today, you can cashout again in ${hh_mm_ss}`;
-                res.status(CONSTANTS.HTTP.CONFLICT).json(myUtils.generateJSONSkeleton(msgLimit, CONSTANTS.HTTP.CONFLICT));
-            }
-            else {
-                let updatedInfo;
-                const updateAndCashout = db.transaction(function () {
-                    resetCashout(player_username, res);
-                    updatedInfo = getCashoutInfo(player_username, res);
-                    stmtUpdateCashoutTableAfterCashoutOverADay.run({
-                        "username": player_username,
-                        "cashout_amnount": updatedInfo.budget,
-                        "cashout_max_value": updatedInfo.maxValue
-                    });
-                    stmtUpdatePlayerTableAfterCashout.run(updatedInfo.budget, player_username);
-                });
-                updateAndCashout();
-                const updatedRoundedBalance = myUtils.roundToFixed(updatedInfo.balance);
-                const msg = `Congratulations! You have cashed out ${updatedRoundedBalance} L$ `;
-                res.json(myUtils.generateJSONSkeleton(msg));
-            }
+        else if (cashoutInfo instanceof CashoutStatus.OutOfQuota) {
+            const msgLimit = `You have reached the cashout limit for today, you can cashout again in ${cashoutInfo.remainingTime}`;
+            res.status(CONSTANTS.HTTP.CONFLICT).json(myUtils.generateJSONSkeleton(msgLimit, CONSTANTS.HTTP.CONFLICT));
         }
         else {
-            const msg = `Congratulations! You have cashed out ${roundedBalance} L$`;
-            const cashoutWithinADay = db.transaction(function () {
-                stmtUpdateCashoutTableAfterCashoutWithinADay.run({
-                    "username": player_username,
-                    "cashout_amnount": cashoutInfo.budget
-                });
-                stmtUpdatePlayerTableAfterCashout.run(cashoutInfo.budget, player_username);
-            });
-            const cashoutAfterTimeLimit = db.transaction(function () {
-                stmtUpdateCashoutTableAfterCashoutOverADay.run({
-                    "username": player_username,
-                    "cashout_amnount": cashoutInfo.budget,
-                    "cashout_max_value": cashoutInfo.maxValue
-                });
-                stmtUpdatePlayerTableAfterCashout.run(cashoutInfo.budget, player_username);
-            });
-            if (cashoutInfo.isWithinADay) {
-                cashoutWithinADay();
-            }
-            else {
-                cashoutAfterTimeLimit();
-            }
+            const msg = `Congratulations! You have cashed out ${cashoutInfo.balanceTaken} L$, You have ${cashoutInfo.remainingBalance} L$ left`;
             res.json(myUtils.generateJSONSkeleton(msg));
         }
     }
@@ -696,125 +402,27 @@ router.get("/rod/auth", function (req, res) {
 });
 
 router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, middlewares.fishpotMiddleware, function (req, res) {
-    const sqlForFish = `
-WITH probability AS (
-    SELECT ABS(RANDOM() / CAST(-9223372036854775808 AS REAL)) AS probability
-)
-SELECT 
-    f.fish_name, 
-    f.fish_value,
-    (SELECT buoy_multiplier FROM buoy WHERE buoy_uuid = ?) AS multiplier
-FROM 
-    fish AS f, 
-    probability AS pr, 
-    fish_probability AS p
-        JOIN fish_probability ON (f.fish_probability_class = p.probability_class)
-        JOIN probability ON pr.probability < p.probability_value OR f.fish_probability_class = 'Common'
-        WHERE (pr.probability < p.probability_value OR f.fish_probability_class = 'Common') 
-        ORDER BY RANDOM()
-        LIMIT 1       
-;
-`;
-    const sqlForRank = `
-WITH ranked_fishers AS (
-SELECT
-    rank_overall.player_username,
-    player.player_display_name,
-    cashout.balance,
-    rank_overall.xp,
-    RANK() OVER (ORDER BY rank_overall.xp DESC) AS rank
-FROM
-    rank_overall
-LEFT JOIN 
-    player ON rank_overall.player_username = player.player_username,
-    cashout ON rank_overall.player_username = cashout.player_username
-)
-SELECT
-    ro1.player_username,
-    ro1.player_display_name,
-    ro1.balance,
-    ro1.xp,
-    ro1.rank,
-    ro2.player_display_name AS above_display_name,
-    ro2.xp - ro1.xp AS xp_difference,
-    ro2.rank AS above_rank
-FROM
-    ranked_fishers AS ro1
-LEFT JOIN 
-    ranked_fishers AS ro2 ON ro1.rank = ro2.rank + 1
-WHERE ro1.player_username = ?;
-    `;
-    const sqlForWorms = `
-UPDATE rod_info 
-SET 
-    small_worms = CASE WHEN selected_worm = 1 THEN small_worms - 1 ELSE small_worms END,
-    tasty_worms = CASE WHEN selected_worm = 2 THEN tasty_worms - 1 ELSE tasty_worms END,
-    enchanted_worms = CASE WHEN selected_worm = 3 THEN enchanted_worms - 1 ELSE enchanted_worms END,
-    magic_worms = CASE WHEN selected_worm = 4 THEN magic_worms - 1 ELSE magic_worms END,
-    alacrity_charges = CASE WHEN alacrity_charges > 0 THEN alacrity_charges - 1 ELSE alacrity_charges END
-WHERE rod_uuid = ?;
-    `;
-    const sqlRodInfo = `
-    SELECT 
-        small_worms, 
-        tasty_worms, 
-        enchanted_worms, 
-        magic_worms, 
-        selected_worm, 
-        alacrity_charges,
-        rod_type
-    FROM 
-        rod_info 
-    WHERE 
-        rod_uuid = ?;
-        `;
-    const sqlForBuoys = `
-UPDATE buoy 
-    SET 
-    buoy_balance = buoy_balance - ?,
-    fishpot = fishpot +  ?
-WHERE buoy_uuid = ?;
-    `;
-    const sqlCastHandling = `
-INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
-    ON CONFLICT (buoy_uuid, player_username) DO UPDATE SET casts = casts + 1;
-    `;
-
-
     try {
-        const stmtFish = db.prepare(sqlForFish);
-        const stmtRank = db.prepare(sqlForRank);
-        const stmtWorm = db.prepare(sqlForWorms);
-        const stmtRodInfo = db.prepare(sqlRodInfo);
-        const stmtBuoy = db.prepare(sqlForBuoys);
-        const stmtCastHandling = db.prepare(sqlCastHandling);
+        const player = Player.fromDB(req.params.player_username);
+        const rod = Rod.fromDB(req.params.rod_uuid);
+        const buoy = Buoy.fromDB(req.params.buoy_uuid);
 
-        let fishCaught, rodInfo, rankInfo, fish_value_multiplied, inventoryInfo;
+        let fishCaught, rodInfo, rankInfo, buoyInfo, inventoryInfo;
         var alacrityEnabled = false;
 
         const castTransaction = db.transaction(function () {
-            stmtCastHandling.run(req.params.buoy_uuid, req.params.player_username);
-            stmtWorm.run(req.params.rod_uuid);
-
-            fishCaught = stmtFish.get(req.params.buoy_uuid);
-            rodInfo = stmtRodInfo.get(req.params.rod_uuid);
-            fish_value_multiplied = fishCaught.fish_value * fishCaught.multiplier;
-            const fishpot_value = fish_value_multiplied * CONSTANTS.FISHPOT_RATE;
+            fishCaught = new Fish(req.params.buoy_uuid);
+            rankInfo = player.getRankInfo(); // TODO : standardize
+            rodInfo = Rod.cast(rod);
+            buoyInfo = buoy.updateAfterCast(fishCaught.fish_value, req.params.player_username);
 
             if (rodInfo.alacrity_charges != 0) {
                 alacrityEnabled = true;
             }
 
-            stmtBuoy.run(
-                fish_value_multiplied,
-                fishpot_value,
-                req.params.buoy_uuid
-            );
-
             req.params.worm_type = rodInfo.selected_worm;
 
-            inventoryInfo = updateAfterCast(req, fish_value_multiplied, rodInfo.rod_type, res);
-            rankInfo = stmtRank.get(req.params.player_username);
+            inventoryInfo = updateAfterCast(req, fishCaught.multipliedValue, rodInfo.rod_type, res);
         });
         castTransaction();
         setRedisCastCache(
@@ -839,7 +447,7 @@ INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
             debugCast: fishCaught.casts,
             earnings: {
                 balance: rankInfo.balance,
-                fish_value: fish_value_multiplied,
+                fish_value: fishCaught.multipliedValue,
             },
             rank_info: {
                 rank: rankInfo.rank,
@@ -848,7 +456,7 @@ INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
                 above_rank: rankInfo.above_rank,
             },
         };
-        res.json(myUtils.generateJSONSkeleton(generateResponseString(fishCaught, rodInfo, rankInfo, inventoryInfo)));
+        res.json(myUtils.generateJSONSkeleton(generateResponseString(fishCaught, rodInfo, rankInfo, inventoryInfo,)));
         // for debug visualization
         // res.json(myUtils.generateJSONSkeleton(debugObj));
     } catch (err) {

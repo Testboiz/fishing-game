@@ -19,7 +19,7 @@ class Player {
                 return new Player(rows.player_username, rows.player_display_name);
             }
             else {
-                return null;
+                throw new Error("Invalid Key");
             }
         } catch (err) {
             throw err;
@@ -100,6 +100,16 @@ WHERE ro1.player_username = ?;
         try {
             const stmt = db.prepare(sql);
             return stmt.get(this.#player_username);
+        } catch (err) {
+            throw err;
+        }
+    }
+
+    addXP(xpAmnount) {
+        const sql = `UPDATE rank_overall  SET xp = xp + ? WHERE player_username = ?;`;
+        try {
+            const stmt = db.prepare(sql);
+            stmt.run(xpAmnount, this.#player_username);
         } catch (err) {
             throw err;
         }
