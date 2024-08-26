@@ -9,6 +9,9 @@ const db = require("./singletons/db");
 const CONSTANTS = require("./singletons/constants");
 
 const Inventory = require("./models/inventory");
+const Player = require("./models/player");
+const Rod = require("./models/rod");
+const Buoy = require("./models/buoy");
 
 const client = redis.createClient();
 client.connect().then();
@@ -444,7 +447,7 @@ router.get("/", function (_, res) {
     res.json(myUtils.generateJSONSkeleton("Server is up!"));
 });
 
-router.post("/rod", middlewares.playerRegisterMiddleware, function (req, res) {
+router.post("/rod/register", middlewares.playerRegisterMiddleware, function (req, res) {
     const params = {
         rod_uuid: req.query.rod_uuid,
         player_username: req.query.player_username,
@@ -455,14 +458,13 @@ router.post("/rod", middlewares.playerRegisterMiddleware, function (req, res) {
     const msg = "Player and rod registered with free 100 Small Worms";
     const responseJSON = myUtils.generateJSONSkeleton(msg);
     try {
-        const sql = `
-INSERT INTO rod_info 
-(rod_uuid, small_worms, player_username,rod_type)
-VALUES
-(?,100,?,?)
-    `;
-        const stmt = db.prepare(sql);
-        stmt.run(params.rod_uuid, params.player_username, params.rod_type);
+        const newRod = new Rod({
+            rod_uuid: params.rod_uuid,
+            small_worms: 100, // move to constants
+            player_username: params.player_username,
+            rod_type: params.rod_type
+        });
+        newRod.addToDB();
         res.json(responseJSON);
     }
     catch (err) {
@@ -486,23 +488,22 @@ router.post("/rod/add-worms", function (req, res) {
     };
     try {
         myUtils.ensureParametersOrValueNotNull(params);
-        let sql;
+        const rod = Rod.fromDB(params.rod_uuid);
         switch (params.worm_type.toLowerCase()) {
             case "small_worms":
-                sql = `UPDATE rod_info SET small_worms = small_worms + ? WHERE rod_uuid = ?`;
+                rod.add_small_worms(params.worm_amnount);
                 break;
             case "tasty_worms":
-                sql = `UPDATE rod_info SET tasty_worms = tasty_worms + ? WHERE rod_uuid = ?`;
+                rod.add_tasty_worms(params.worm_amnount);
                 break;
             case "enchanted_worms":
-                sql = `UPDATE rod_info SET enchanted_worms = enchanted_worms + ? WHERE rod_uuid = ?`;
+                rod.add_enchanted_worms(params.worm_amnount);
                 break;
             case "magic_worms":
-                sql = `UPDATE rod_info SET magic_worms = magic_worms + ? WHERE rod_uuid = ?`;
+                rod.add_magic_worms(params.worm_amnount);
                 break;
         }
-        stmt = db.prepare(sql);
-        stmt.run(params.worm_amnount, params.rod_uuid);
+        rod.updateToDB();
         let msg = `You have bought ${params.worm_amnount} ${params.worm_type.replace("_", " ")} `;
         const responseJSON = myUtils.generateJSONSkeleton(msg);
         res.json(responseJSON);
@@ -522,9 +523,8 @@ router.post("/buoy/register", middlewares.playerRegisterMiddleware, function (re
     const msg = "Buoy has been registered!";
     try {
         myUtils.ensureParametersOrValueNotNull(params);
-        const sql = `INSERT INTO buoy (buoy_uuid, buoy_color) VALUES (?,?)`;
-        const stmt = db.prepare(sql);
-        stmt.run(params.buoy_uuid, params.buoy_color);
+        const newBuoy = new Buoy({ buoy_uuid: params.buoy_uuid, buoy_color: params.buoy_color });
+        newBuoy.addToDB();
         res.json(myUtils.generateJSONSkeleton(msg));
     }
     catch (err) {
@@ -546,9 +546,10 @@ router.post("/buoy/set-location-name", function (req, res) {
     const msg = "Buoy location set";
     try {
         myUtils.ensureParametersOrValueNotNull(params);
-        const sql = `UPDATE buoy SET buoy_location_name = ? WHERE buoy_uuid = ?`;
-        const stmt = db.prepare(sql);
-        stmt.run(params.location_name, params.buoy_uuid);
+        const buoy = Buoy.fromDB(params.buoy_uuid);
+        buoy.buoy_location_name = params.location_name;
+
+        buoy.updateToDB();
         res.json(myUtils.generateJSONSkeleton(msg));
     }
     catch (err) {
@@ -564,10 +565,9 @@ router.post("/buoy/add-balance", function (req, res) {
     const msg = `Buoy balance added by ${params.linden_amnount} L$ (Tax Applied)`;
     try {
         myUtils.ensureParametersOrValueNotNull(params);
-        const sql = `UPDATE buoy SET buoy_balance = buoy_balance + ? * ? WHERE buoy_uuid = ?`;
-        const stmt = db.prepare(sql);
-        const tax = calculateTax(res, params.buoy_uuid);
-        stmt.run(params.linden_amnount, tax, params.buoy_uuid);
+        const buoy = Buoy.fromDB(params.buoy_uuid);
+        buoy.addBalance(params.linden_amnount);
+        buoy.updateToDB();
         res.json(myUtils.generateJSONSkeleton(msg));
     }
     catch (err) {
@@ -667,23 +667,20 @@ UPDATE cashout
     }
 });
 
-router.get("/auth", function (req, res) {
-    const query =
-        "SELECT * FROM rod_info WHERE rod_uuid = ? AND player_username = ?";
+router.get("/rod/auth", function (req, res) {
     const params = {
         rod_uuid: req.query.rod_uuid,
         player_username: req.query.player_username,
     };
 
     try {
-        const stmt = db.prepare(query);
         myUtils.ensureParametersOrValueNotNull(params);
 
-        // parameters can be immmediately puy on the function, making the code cleaner
-        const result = stmt.get(params.rod_uuid, params.player_username);
+        const rodToAuth = Rod.fromDB(params.rod_uuid);
+        const authStatus = rodToAuth.authenticate(params.player_username);
         var jsonOutput = {};
 
-        if (result) {
+        if (authStatus) {
             const msg = "Authorization Successful";
             jsonOutput = myUtils.generateJSONSkeleton(msg);
         }

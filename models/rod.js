@@ -1,4 +1,4 @@
-const db = require("./singletons/db");
+const db = require("../singletons/db");
 
 class Rod {
     #rod_uuid;
@@ -6,6 +6,7 @@ class Rod {
     #tasty_worms;
     #enchanted_worms;
     #magic_worms;
+    #player_username;
     #alacrity_charges;
     #rod_type;
 
@@ -15,6 +16,8 @@ class Rod {
         tasty_worms = 0,
         enchanted_worms = 0,
         magic_worms = 0,
+        player_username = "",
+        alacrity_charges = 0,
         rod_type = 1
     }) {
         this.#rod_uuid = rod_uuid;
@@ -22,6 +25,7 @@ class Rod {
         this.#tasty_worms = tasty_worms;
         this.#enchanted_worms = enchanted_worms;
         this.#magic_worms = magic_worms;
+        this.#player_username = player_username;
         this.#alacrity_charges = alacrity_charges;
         this.#rod_type = rod_type;
     }
@@ -31,7 +35,7 @@ class Rod {
 
         try {
             const stmt = db.prepare(sql);
-            const row = stmt.get(buoy_uuid);
+            const row = stmt.get(rod_uuid);
             if (!row) {
                 throw new Error("Invalid Key");
             }
@@ -42,6 +46,7 @@ class Rod {
                 tasty_worms: row.tasty_worms,
                 enchanted_worms: row.enchanted_worms,
                 magic_worms: row.magic_worms,
+                player_username: row.player_username,
                 alacrity_charges: row.alacrity_charges,
                 rod_type: row.rod_type
             });
@@ -58,15 +63,17 @@ INSERT INTO rod_info (
     tasty_worms,
     enchanted_worms,
     magic_worms,
+    player_username,
     alacrity_charges,
     rod_type
     )
 VALUES (
-    ':rod_uuid',
+    :rod_uuid,
     :small_worms,
     :tasty_worms,
     :enchanted_worms,
     :magic_worms,
+    :player_username,
     :alacrity_charges,
     :rod_type
     );`;
@@ -78,8 +85,34 @@ VALUES (
                 tasty_worms: this.#tasty_worms,
                 enchanted_worms: this.#enchanted_worms,
                 magic_worms: this.#magic_worms,
+                player_username: this.#player_username,
                 alacrity_charges: this.#alacrity_charges,
                 rod_type: this.#rod_type
+            });
+        } catch (err) {
+            throw err;
+        }
+    }
+
+    updateToDB() {
+        const sql = `
+UPDATE rod_info SET
+    small_worms = :small_worms,
+    tasty_worms = :tasty_worms,
+    enchanted_worms = :enchanted_worms,
+    magic_worms = :magic_worms,
+    alacrity_charges = :alacrity_charges
+WHERE rod_uuid = :rod_uuid
+`;
+        try {
+            const stmt = db.prepare(sql);
+            stmt.run({
+                small_worms: this.#small_worms,
+                tasty_worms: this.#tasty_worms,
+                enchanted_worms: this.#enchanted_worms,
+                magic_worms: this.#magic_worms,
+                alacrity_charges: this.#alacrity_charges,
+                rod_uuid: this.#rod_uuid
             });
         } catch (err) {
             throw err;

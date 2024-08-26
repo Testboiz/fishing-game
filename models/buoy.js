@@ -109,15 +109,15 @@ WHERE buoy_uuid = :buoy_uuid;
             throw err;
         }
     }
-    calculateTax() {
+    #calculateTax(balance) {
         try {
             switch (this.#buoy_color) {
                 case "red":
-                    return 0.5;
+                    return 0.5 * balance;
                 case "yellow":
-                    return 0.75;
+                    return 0.75 * balance;
                 case "blue":
-                    return 0.85;
+                    return 0.85 * balance;
                 default:
                     throw new Error("Unidentified Buoy Color");
             }
@@ -205,7 +205,7 @@ INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
         }
     }
     addBalance(balance) {
-        this.#buoy_balance + balance;
+        this.#buoy_balance += this.#calculateTax(balance);
     }
     getMultipliedFishValue(fish_value) {
         return this.#buoy_multiplier * fish_value;
