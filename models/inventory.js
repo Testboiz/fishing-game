@@ -1,20 +1,16 @@
 const db = require("../singletons/db");
 
 class Inventory {
-    #player_username;
-    #gold;
-    #fish;
-    #powder;
     constructor({
         player_username = "",
         gold = 0,
         fish = 0,
         powder = 0
     }) {
-        this.#player_username = player_username;
-        this.#gold = gold;
-        this.#fish = fish;
-        this.#powder = powder;
+        this.player_username = player_username;
+        this.gold = gold;
+        this.fish = fish;
+        this.powder = powder;
     }
 
     static fromDB(player_username) {
@@ -48,10 +44,10 @@ VALUES
         try {
             const stmt = db.prepare(sql);
             stmt.run({
-                username: this.#player_username,
-                gold: this.#gold,
-                fish: this.#fish,
-                powder: this.#powder
+                username: this.player_username,
+                gold: this.gold,
+                fish: this.fish,
+                powder: this.powder
             });
         }
         catch (err) {
@@ -71,10 +67,10 @@ WHERE player_username = :username;
         try {
             const stmt = db.prepare(sql);
             stmt.run({
-                username: this.#player_username,
-                gold: this.#gold,
-                fish: this.#fish,
-                powder: this.#powder
+                username: this.player_username,
+                gold: this.gold,
+                fish: this.fish,
+                powder: this.powder
             });
 
         } catch (err) {
@@ -82,41 +78,32 @@ WHERE player_username = :username;
         }
     }
 
-    get gold() {
-        return this.#gold;
+    toObject() {
+        const obj = {};
+        Object.getOwnPropertyNames(this).forEach((key) => {
+            obj[key] = this[key];
+        });
+        console.log(obj);
+        return obj;
     }
-    get fish() {
-        return this.#fish;
-    }
-    get powder() {
-        return this.#powder;
-    }
-    set gold(gold) {
-        this.#gold = gold;
-    }
-    set fish(fish) {
-        this.#fish = fish;
-    }
-    set powder(powder) {
-        this.#powder = powder;
-    }
+
     addGold(goldAmnount) {
-        this.#gold = this.#gold + goldAmnount;
+        this.gold = this.gold + goldAmnount;
     }
     addFish(fishAmnount) {
-        this.#fish = this.#fish + fishAmnount;
+        this.fish = this.fish + fishAmnount;
     }
     addPowder(powderAmnount) {
-        this.#powder = this.#powder + powderAmnount;
+        this.powder = this.powder + powderAmnount;
     }
     takeGold(goldAmnount) {
-        this.#gold = this.#gold - goldAmnount;
+        this.gold = this.gold - goldAmnount;
     }
     takeFish(fishAmnount) {
-        this.#fish = this.#fish - fishAmnount;
+        this.fish = this.fish - fishAmnount;
     }
     takePowder(powderAmnount) {
-        this.#powder = this.#powder - powderAmnount;
+        this.powder = this.powder - powderAmnount;
     }
 }
 

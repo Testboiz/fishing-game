@@ -29,7 +29,7 @@ Small Worms: ${rodInfo.small_worms}
 Tasty Worms: ${rodInfo.tasty_worms}
 Enchanted Worms: ${rodInfo.enchanted_worms}
 Magic Worms: ${rodInfo.magic_worms}
-Gold : ${inventoryInfo.inventory._gold}
+Gold : ${inventoryInfo.inventory.gold}
 
         `,
         (rodInfo.alacrity_charges != 0)
@@ -38,7 +38,7 @@ Gold : ${inventoryInfo.inventory._gold}
         `
 You caught ${fishCaught.fish_name}
 Fishing Exp: ${rankInfo.xp} (+1)
-Fish: ${inventoryInfo.inventory._fish}
+Fish: ${inventoryInfo.inventory.fish}
 Your Earnings: ${rankInfo.balance} L$ (+${fishCaught.fish_value}) 
 Rank Extras!: Coming Soon!
 Kingdoms Coming Soon! 
@@ -52,18 +52,18 @@ Rank (overall):  ${rankInfo.rank}
             : `You are the top fisher!`,
         `\n`,
         `Rank (monthly):  Coming Soon!\n`,
-        (inventoryInfo.first) ? inventoryInfo.first.generateLotteryMessage() : "",
-        (inventoryInfo.second) ? inventoryInfo.second.generateLotteryMessage() : "",
+        (inventoryInfo[0]) ? inventoryInfo[0].generateLotteryMessage() : "",
+        (inventoryInfo[1]) ? inventoryInfo[1].generateLotteryMessage() : "",
     ];
     return strArray.join("\n");
 }
 
-function __setRedisCastCacheCallback(err, reply) { // controller
+function __setRedisCastCacheCallback(err, reply) {
     if (err) throw err;
     console.log(reply);
 }
 
-function setRedisCastCache(buoy_uuid, rod_uuid, worm_type, { // controller
+function setRedisCastCache(buoy_uuid, rod_uuid, worm_type, {
     alacrity = false,
     shubbie = false,
     shubbieType = "blue"
@@ -90,61 +90,66 @@ function setRedisCastCache(buoy_uuid, rod_uuid, worm_type, { // controller
                 throw new myUtils.BadRequestFormatError();
         }
     }
+    let timeoutValue, wormName;
     switch (worm_type) {
         case 1:
-            client.setEx(
-                keyString,
-                Math.round(CONSTANTS.TIMEOUT.SMALL_WORMS * timeMultiplier),
-                "Small Worms",
-                __setRedisCastCacheCallback
-            );
+            timeoutValue = Math.round(CONSTANTS.TIMEOUT.SMALL_WORMS * timeMultiplier);
+            wormName = "Small Worms";
             break;
         case 2:
-            client.setEx(
-                keyString,
-                Math.round(CONSTANTS.TIMEOUT.TASTY_WORMS * timeMultiplier),
-                "Tasty Worms",
-                __setRedisCastCacheCallback
-            );
+            timeoutValue = Math.round(CONSTANTS.TIMEOUT.TASTY_WORMS * timeMultiplier);
+            wormName = "Tasty Worms";
             break;
         case 3:
-            client.setEx(
-                keyString,
-                Math.round(CONSTANTS.TIMEOUT.ENCHANTED_WORMS * timeMultiplier),
-                "Enchanted Worms",
-                __setRedisCastCacheCallback
-            );
+            timeoutValue = Math.round(CONSTANTS.TIMEOUT.ENCHANTED_WORMS * timeMultiplier);
+            wormName = "Enchanted Worms";
             break;
         case 4:
-            client.setEx(
-                keyString,
-                Math.round(CONSTANTS.TIMEOUT.MAGIC_WORMS * timeMultiplier),
-                "Magic Worms",
-                __setRedisCastCacheCallback
-            );
+            timeoutValue = Math.round(CONSTANTS.TIMEOUT.MAGIC_WORMS * timeMultiplier);
+            wormName = "Magic Worms";
             break;
         default:
             throw new myUtils.BadRequestFormatError();
     }
-}
-
-function setWormType(worm_type) {  // ??
-    switch (worm_type) {
-        case 1:
-            return "Small Worms";
-        case 2:
-            return "Tasty Worms";
-        case 3:
-            return "Enchanted Worms";
-        case 4:
-            return "Magic Worms";
-        default:
-            return "Undefined Worm Type";
+    try {
+        client.setEx(
+            keyString,
+            timeoutValue,
+            wormName,
+            __setRedisCastCacheCallback
+        );
+    } catch (err) {
+        throw err;
     }
 }
 
-function updateAfterCast(req, fish_value_multiplied, rod_type, res) {  // controller, may not be needed
-    const inventoryInfo = {}, xpTriggers = {}, inventoryObject = {};
+function handleLotteries(lotteryInfo, Rod, Inventory, xpTriggers) {
+    try {
+        for (var i = 0; i < lotteryInfo.length; i++) {
+            switch (lotteryInfo[i]) {
+                case "worm":
+                    Rod.addLotteryWorms();
+                    break;
+                case "alacrity":
+                    if (rod_type > CONSTANTS.ENUMS.ROD.ENCHANTED) {
+                        Rod.add_alacrity_charges(5);
+                    }
+                    break;
+                case "powder":
+                    Inventory.addPowder(1);
+                    break;
+                case "xp":
+                    xpTriggers.push(true);
+                    break;
+            }
+        }
+    } catch (err) {
+        throw err;
+    }
+}
+
+function updateAfterCast(req, fish_value_multiplied) {
+    const lotteryInfo = [], xpTriggers = [];
 
     try {
         const inventory = Inventory.fromDB(req.params.player_username);
@@ -152,49 +157,13 @@ function updateAfterCast(req, fish_value_multiplied, rod_type, res) {  // contro
         const player = Player.fromDB(req.params.player_username);
         const rod = Rod.fromDB(req.params.rod_uuid);
 
-        const firstLottery = new FishLottery();
-        const secondLottery = new FishLottery();
-
-        inventoryInfo.first = firstLottery;
-        inventoryInfo.second = secondLottery;
+        lotteryInfo.push(new FishLottery());
+        lotteryInfo.push(new FishLottery());
 
         inventory.addGold(1);
         inventory.addFish(1);
 
-        switch (firstLottery) {
-            case "worm":
-                rod.addLotteryWorms();
-                inventoryInfo.first = setWormType(req.params.worm_type);
-                break;
-            case "alacrity":
-                if (rod_type > CONSTANTS.ENUMS.ROD.ENCHANTED) {
-                    rod.add_alacrity_charges(5);
-                }
-                break;
-            case "powder":
-                inventory.addPowder(1);
-                break;
-            case "xp":
-                xpTriggers.first = true;
-                break;
-        }
-        switch (secondLottery) {
-            case "worm":
-                rod.addLotteryWorms();
-                inventoryInfo.second = setWormType(req.params.worm_type);
-                break;
-            case "alacrity":
-                if (rod_type > CONSTANTS.ENUMS.ROD.ENCHANTED) {
-                    rod.add_alacrity_charges(5);
-                }
-                break;
-            case "powder":
-                inventory.addPowder(1);
-                break;
-            case "xp":
-                xpTriggers.second = true;
-                break;
-        }
+        handleLotteries(lotteryInfo, rod, inventory, xpTriggers);
 
         const updateAfterCastTransaction = db.transaction(function () {
             player.addXP(rod.computeXP(xpTriggers));
@@ -204,10 +173,8 @@ function updateAfterCast(req, fish_value_multiplied, rod_type, res) {  // contro
         });
         updateAfterCastTransaction();
 
-        Object.assign(inventoryObject, inventory);
-        inventoryInfo.inventory = inventoryObject;
-
-        return inventoryInfo;
+        lotteryInfo.inventory = inventory.toObject();
+        return lotteryInfo;
     }
     catch (err) {
         throw err;
@@ -422,7 +389,7 @@ router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, m
 
             req.params.worm_type = rodInfo.selected_worm;
 
-            inventoryInfo = updateAfterCast(req, fishCaught.multipliedValue, rodInfo.rod_type, res);
+            inventoryInfo = updateAfterCast(req, fishCaught.multipliedValue);
         });
         castTransaction();
         setRedisCastCache(
