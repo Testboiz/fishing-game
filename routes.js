@@ -30,6 +30,7 @@ Tasty Worms: ${rodInfo.tasty_worms}
 Enchanted Worms: ${rodInfo.enchanted_worms}
 Magic Worms: ${rodInfo.magic_worms}
 Gold : ${inventoryInfo.gold}
+Gold : ${inventoryInfo.gold}
 
         `,
         (rodInfo.alacrity_charges != 0)
@@ -52,8 +53,8 @@ Rank (overall):  ${rankInfo.rank}
             : `You are the top fisher!`,
         `\n`,
         `Rank (monthly):  Coming Soon!\n`,
-        (lotteryInfo[0]) ? lotteryInfo[0].generateLotteryMessage() : "",
-        (lotteryInfo[1]) ? lotteryInfo[1].generateLotteryMessage() : "",
+        (inventoryInfo[0]) ? inventoryInfo[0].generateLotteryMessage() : "",
+        (inventoryInfo[1]) ? inventoryInfo[1].generateLotteryMessage() : "",
     ];
     return strArray.join("\n");
 }
