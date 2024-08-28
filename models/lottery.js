@@ -14,7 +14,7 @@ LIMIT 1;
         `;
         const prob = Math.random();
         try {
-            if (prob > CONSTANTS.FISHPOT_RATE) {
+            if (prob > CONSTANTS.FISH_LOTTERY_RATE) {
                 const stmt = db.prepare(sql);
                 const row = stmt.get(prob);
 

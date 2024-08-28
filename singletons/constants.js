@@ -61,7 +61,8 @@ const constants = {
     MILISECONDS_IN_SECOND: 1000,
     TAX: 0.15, // temporal flat 15% tax
     TEMP_XP: 1,
-    TWO_DIGITS_PRECISION: 2
+    TWO_DIGITS_PRECISION: 2,
+    STARTER_WORMS: 100
 };
 
 module.exports = constants;

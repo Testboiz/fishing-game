@@ -166,7 +166,7 @@ router.post("/rod/register", middlewares.playerRegisterMiddleware, function (req
     try {
         const newRod = new Rod({
             rod_uuid: params.rod_uuid,
-            small_worms: 100, // move to constants
+            small_worms: CONSTANTS.STARTER_WORMS,
             player_username: params.player_username,
             rod_type: params.rod_type
         });
@@ -319,17 +319,16 @@ router.get("/rod/auth", function (req, res) {
 
         const rodToAuth = Rod.fromDB(params.rod_uuid);
         const authStatus = rodToAuth.authenticate(params.player_username);
-        var jsonOutput = {};
 
+        let msg;
         if (authStatus) {
-            const msg = "Authorization Successful";
-            jsonOutput = myUtils.generateJSONSkeleton(msg);
+            msg = "Authorization Successful";
+            res.json(myUtils.generateJSONSkeleton(msg));
         }
         else {
-            const msg = "Authorization Failed, Rod cannot be transferred to another player";
-            jsonOutput = myUtils.generateJSONSkeleton(msg, CONSTANTS.HTTP.FORBIDDEN);
+            msg = "Authorization Failed, Rod cannot be transferred to another player";
+            res.json(myUtils.generateJSONSkeleton(msg, CONSTANTS.HTTP.FORBIDDEN));
         }
-        res.status(jsonOutput["status"]).json(jsonOutput);
     }
     catch (err) {
         myUtils.handleError(err, res);

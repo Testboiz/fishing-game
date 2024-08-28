@@ -83,7 +83,6 @@ WHERE player_username = :username;
         Object.getOwnPropertyNames(this).forEach((key) => {
             obj[key] = this[key];
         });
-        console.log(obj);
         return obj;
     }
 

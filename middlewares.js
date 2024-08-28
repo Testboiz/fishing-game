@@ -16,42 +16,10 @@ const middleware = {};
 const client = redis.createClient();
 client.connect().then(); // to make sure that the client has been properly awaited
 
-function addSpookRecord(buoy_uuid, player_username) {
-    const sql = `
-INSERT INTO buoy_casts 
-(buoy_uuid, player_username, casts)
-VALUES
-(?,?,0)`;
-    try {
-        db.prepare(sql).run(buoy_uuid, player_username);
-    } catch (err) {
-        throw err;
-    }
-}
-
-function getCastsAndSpookTime(res, buoy_uuid, player_username) {
-    try {
-        const sql = `
-SELECT casts, previous_spook_time FROM buoy_casts
-WHERE buoy_uuid = ? AND player_username = ?;`;
-        const stmt = db.prepare(sql);
-        const rows = stmt.get(buoy_uuid, player_username);
-        if (rows) {
-            return rows;
-        }
-        else {
-            addSpookRecord(buoy_uuid, player_username);
-            const newRows = stmt.get(buoy_uuid, player_username);
-            return newRows;
-        }
-    } catch (err) {
-        myUtils.handleError(err, res);
-    }
-}
-
 function checkSpook(res, buoy_uuid, player_username) {
     try {
-        const rows = getCastsAndSpookTime(res, buoy_uuid, player_username);
+        const fishedBuoy = Buoy.fromDB(buoy_uuid);
+        const rows = fishedBuoy.getCastsAndSpookTime(buoy_uuid, player_username);
         const dateSql = myUtils.sqlToJSDateUTC(rows.previous_spook_time);
         const timeDifference = myUtils.getRemainingMiliseconds(dateSql);
         const remainingTime = myUtils.getHHMMSSFromMiliseconds(timeDifference);
@@ -136,6 +104,7 @@ middleware.castMiddleware = async function castCacheMiddleware(req, res, next) {
         };
         myUtils.ensureParametersOrValueNotNull(params);
 
+        const fishedBuoy = Buoy.fromDB(params.buoy_uuid);
         req.params = params; // this would simplify the code in the route
         const keyString = params.buoy_uuid.toString() + params.rod_uuid.toString() + params.player_username.toString();
         const value = await client.get(keyString);
@@ -150,8 +119,7 @@ middleware.castMiddleware = async function castCacheMiddleware(req, res, next) {
                 params.buoy_uuid,
                 params.player_username
             );
-            let castInfo = getCastsAndSpookTime(
-                res,
+            let castInfo = fishedBuoy.getCastsAndSpookTime(
                 params.buoy_uuid,
                 params.player_username
             );
@@ -170,8 +138,7 @@ middleware.castMiddleware = async function castCacheMiddleware(req, res, next) {
                 let status = checkSpook(res, params.buoy_uuid, params.player_username);
                 if (status === true) {
                     // reset cast
-                    let castInfo = getCastsAndSpookTime(
-                        res,
+                    let castInfo = fishedBuoy.getCastsAndSpookTime(
                         params.buoy_uuid,
                         params.player_username
                     );
