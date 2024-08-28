@@ -22,14 +22,14 @@ const client = redis.createClient();
 client.connect().then();
 
 // Helper function to handle the complexity of multiline string handling
-function generateResponseString(fishCaught, rodInfo, rankInfo, inventoryInfo) { // view
+function generateResponseString(fishCaught, rodInfo, rankInfo, inventoryInfo, lotteryInfo) { // view
     var strArray = [
         `
 Small Worms: ${rodInfo.small_worms}
 Tasty Worms: ${rodInfo.tasty_worms}
 Enchanted Worms: ${rodInfo.enchanted_worms}
 Magic Worms: ${rodInfo.magic_worms}
-Gold : ${inventoryInfo.inventory.gold}
+Gold : ${inventoryInfo.gold}
 
         `,
         (rodInfo.alacrity_charges != 0)
@@ -38,7 +38,7 @@ Gold : ${inventoryInfo.inventory.gold}
         `
 You caught ${fishCaught.fish_name}
 Fishing Exp: ${rankInfo.xp} (+1)
-Fish: ${inventoryInfo.inventory.fish}
+Fish: ${inventoryInfo.fish}
 Your Earnings: ${rankInfo.balance} L$ (+${fishCaught.fish_value}) 
 Rank Extras!: Coming Soon!
 Kingdoms Coming Soon! 
@@ -52,8 +52,8 @@ Rank (overall):  ${rankInfo.rank}
             : `You are the top fisher!`,
         `\n`,
         `Rank (monthly):  Coming Soon!\n`,
-        (inventoryInfo[0]) ? inventoryInfo[0].generateLotteryMessage() : "",
-        (inventoryInfo[1]) ? inventoryInfo[1].generateLotteryMessage() : "",
+        (lotteryInfo[0]) ? lotteryInfo[0].generateLotteryMessage() : "",
+        (lotteryInfo[1]) ? lotteryInfo[1].generateLotteryMessage() : "",
     ];
     return strArray.join("\n");
 }
@@ -144,39 +144,6 @@ function handleLotteries(lotteryInfo, Rod, Inventory, xpTriggers) {
             }
         }
     } catch (err) {
-        throw err;
-    }
-}
-
-function updateAfterCast(req, fish_value_multiplied) {
-    const lotteryInfo = [], xpTriggers = [];
-
-    try {
-        const inventory = Inventory.fromDB(req.params.player_username);
-        const balance = Cashout.fromDB(req.params.player_username);
-        const player = Player.fromDB(req.params.player_username);
-        const rod = Rod.fromDB(req.params.rod_uuid);
-
-        lotteryInfo.push(new FishLottery());
-        lotteryInfo.push(new FishLottery());
-
-        inventory.addGold(1);
-        inventory.addFish(1);
-
-        handleLotteries(lotteryInfo, rod, inventory, xpTriggers);
-
-        const updateAfterCastTransaction = db.transaction(function () {
-            player.addXP(rod.computeXP(xpTriggers));
-            balance.addBalance(fish_value_multiplied);
-            rod.updateToDB();
-            inventory.updateDB();
-        });
-        updateAfterCastTransaction();
-
-        lotteryInfo.inventory = inventory.toObject();
-        return lotteryInfo;
-    }
-    catch (err) {
         throw err;
     }
 }
@@ -373,9 +340,20 @@ router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, m
         const player = Player.fromDB(req.params.player_username);
         const rod = Rod.fromDB(req.params.rod_uuid);
         const buoy = Buoy.fromDB(req.params.buoy_uuid);
+        const inventory = Inventory.fromDB(req.params.player_username);
+        const balance = Cashout.fromDB(req.params.player_username);
 
-        let fishCaught, rodInfo, rankInfo, buoyInfo, inventoryInfo;
+        const lotteryInfo = [], xpTriggers = [];
+        let fishCaught, rodInfo, rankInfo, inventoryInfo;
         var alacrityEnabled = false;
+
+        lotteryInfo.push(new FishLottery());
+        lotteryInfo.push(new FishLottery());
+
+        inventory.addGold(1);
+        inventory.addFish(1);
+
+        handleLotteries(lotteryInfo, rod, inventory, xpTriggers);
 
         const castTransaction = db.transaction(function () {
             fishCaught = new Fish(req.params.buoy_uuid);
@@ -389,9 +367,13 @@ router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, m
 
             req.params.worm_type = rodInfo.selected_worm;
 
-            inventoryInfo = updateAfterCast(req, fishCaught.multipliedValue);
+            player.addXP(rod.computeXP(xpTriggers));
+            balance.addBalance(fishCaught.multipliedValue);
+            rod.updateToDB();
+            inventory.updateDB();
         });
         castTransaction();
+        inventoryInfo = inventory.toObject();
         setRedisCastCache(
             req.params.buoy_uuid,
             req.params.rod_uuid,
@@ -405,12 +387,12 @@ router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, m
                 enchanted: rodInfo.enchanted_worms,
                 magic: rodInfo.magic_worms,
             },
-            gold: inventoryInfo.inventory._gold,
+            gold: inventoryInfo.gold,
             fish: fishCaught.fish_name,
             xp: rankInfo.xp,
             alacrity: rodInfo.alacrity_charges,
-            powder: inventoryInfo.inventory._powder,
-            fish: inventoryInfo.inventory._fish,
+            powder: inventoryInfo.powder,
+            fish: inventoryInfo.fish,
             debugCast: fishCaught.casts,
             earnings: {
                 balance: rankInfo.balance,
@@ -423,7 +405,7 @@ router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, m
                 above_rank: rankInfo.above_rank,
             },
         };
-        res.json(myUtils.generateJSONSkeleton(generateResponseString(fishCaught, rodInfo, rankInfo, inventoryInfo,)));
+        res.json(myUtils.generateJSONSkeleton(generateResponseString(fishCaught, rodInfo, rankInfo, inventoryInfo, lotteryInfo)));
         // for debug visualization
         // res.json(myUtils.generateJSONSkeleton(debugObj));
     } catch (err) {
