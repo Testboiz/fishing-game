@@ -53,8 +53,8 @@ Rank (overall):  ${rankInfo.rank}
             : `You are the top fisher!`,
         `\n`,
         `Rank (monthly):  Coming Soon!\n`,
-        (inventoryInfo[0]) ? inventoryInfo[0].generateLotteryMessage() : "",
-        (inventoryInfo[1]) ? inventoryInfo[1].generateLotteryMessage() : "",
+        (lotteryInfo[0]) ? lotteryInfo[0].generateLotteryMessage() : "",
+        (lotteryInfo[1]) ? lotteryInfo[1].generateLotteryMessage() : "",
     ];
     return strArray.join("\n");
 }
