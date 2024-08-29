@@ -335,7 +335,7 @@ router.get("/rod/auth", function (req, res) {
     }
 });
 
-router.put("/cast", /*middlewares.timeoutMiddleware,*/ middlewares.castMiddleware, middlewares.fishpotMiddleware, function (req, res) {
+router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, middlewares.fishpotMiddleware, function (req, res) {
     try {
         const player = Player.fromDB(req.params.player_username);
         const rod = Rod.fromDB(req.params.rod_uuid);
@@ -357,7 +357,7 @@ router.put("/cast", /*middlewares.timeoutMiddleware,*/ middlewares.castMiddlewar
 
         const castTransaction = db.transaction(function () {
             fishCaught = new Fish(req.params.buoy_uuid);
-            rankInfo = player.getRankInfo(); // TODO : standardize
+            rankInfo = player.getRankInfo();
             rodInfo = Rod.cast(rod);
             buoyInfo = buoy.updateAfterCast(fishCaught.fish_value, req.params.player_username);
 

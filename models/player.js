@@ -1,4 +1,5 @@
 const db = require("../singletons/db");
+const PlayerInfo = require("./player-info");
 
 class Player {
     #player_username;
@@ -99,7 +100,17 @@ WHERE ro1.player_username = ?;
     `;
         try {
             const stmt = db.prepare(sql);
-            return stmt.get(this.#player_username);
+            const rows = stmt.get(this.#player_username);
+            return new PlayerInfo({
+                player_username: rows.player_username,
+                player_display_name: rows.player_display_name,
+                balance: rows.balance,
+                xp: rows.xp,
+                rank: rows.rank,
+                above_display_name: rows.above_display_name,
+                xp_difference: rows.xp_difference,
+                above_rank: rows.above_rank
+            });
         } catch (err) {
             throw err;
         }
