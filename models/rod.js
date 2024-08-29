@@ -160,6 +160,7 @@ WHERE rod_uuid = ?;`;
         try {
             const stmt = db.prepare(sql);
             stmt.run(RodObject.rod_uuid);
+
             return Rod.fromDB(RodObject.rod_uuid);
         } catch (err) {
             throw err;

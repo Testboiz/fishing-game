@@ -335,7 +335,7 @@ router.get("/rod/auth", function (req, res) {
     }
 });
 
-router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, middlewares.fishpotMiddleware, function (req, res) {
+router.put("/cast", /*middlewares.timeoutMiddleware,*/ middlewares.castMiddleware, middlewares.fishpotMiddleware, function (req, res) {
     try {
         const player = Player.fromDB(req.params.player_username);
         const rod = Rod.fromDB(req.params.rod_uuid);
@@ -369,7 +369,7 @@ router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, m
 
             player.addXP(rod.computeXP(xpTriggers));
             balance.addBalance(fishCaught.multipliedValue);
-            rod.updateToDB();
+            rodInfo.updateToDB();
             inventory.updateDB();
         });
         castTransaction();
