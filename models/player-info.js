@@ -1,5 +1,6 @@
 class PlayerInfo {
     constructor({
+        player_uuid,
         player_username,
         player_display_name,
         balance,
@@ -9,6 +10,7 @@ class PlayerInfo {
         xp_difference,
         above_rank
     }) {
+        this.player_uuid = player_uuid;
         this.player_username = player_username;
         this.player_display_name = player_display_name;
         this.balance = balance;

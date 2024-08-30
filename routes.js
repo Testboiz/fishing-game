@@ -15,7 +15,7 @@ const Cashout = require("./models/player-cashout");
 const Fish = require("./models/fish");
 const Player = require("./models/player");
 const FishLottery = require("./models/lottery");
-const CashoutStatus = require("./models/player-cashout");
+const { NoBalance, OutOfQuota } = require("./models/cashout-status");
 
 
 const client = redis.createClient();
@@ -156,6 +156,7 @@ router.get("/", function (_, res) {
 router.post("/rod/register", middlewares.playerRegisterMiddleware, function (req, res) {
     const params = {
         rod_uuid: req.query.rod_uuid,
+        player_uuid: req.query.player_uuid,
         player_username: req.query.player_username,
         player_display_name: req.query.player_display_name,
         rod_type: req.query.rod_type
@@ -167,7 +168,7 @@ router.post("/rod/register", middlewares.playerRegisterMiddleware, function (req
         const newRod = new Rod({
             rod_uuid: params.rod_uuid,
             small_worms: CONSTANTS.STARTER_WORMS,
-            player_username: params.player_username,
+            player_uuid: params.player_uuid,
             rod_type: params.rod_type
         });
         newRod.addToDB();
@@ -208,6 +209,8 @@ router.post("/rod/add-worms", function (req, res) {
             case "magic_worms":
                 rod.add_magic_worms(params.worm_amnount);
                 break;
+            default:
+                throw new Error("Invalid Worm Type");
         }
         rod.updateToDB();
         let msg = `You have bought ${params.worm_amnount} ${params.worm_type.replace("_", " ")} `;
@@ -223,6 +226,7 @@ router.post("/buoy/register", middlewares.playerRegisterMiddleware, function (re
     const params = {
         buoy_uuid: req.query.buoy_uuid,
         buoy_color: req.query.buoy_color,
+        player_uuid: req.query.player_uuid,
         player_username: req.query.player_username,
         player_display_name: req.query.player_display_name
     };
@@ -282,19 +286,18 @@ router.post("/buoy/add-balance", function (req, res) {
 });
 
 router.post("/cashout", function (req, res) {
-    const player_username = req.query.player_username;
+    const player_uuid = req.query.player_uuid;
 
     try {
-        myUtils.ensureParametersOrValueNotNull(player_username);
+        myUtils.ensureParametersOrValueNotNull(player_uuid);
 
-        const playerCashout = Cashout.fromDB(player_username);
+        const playerCashout = Cashout.fromDB(player_uuid);
         const cashoutInfo = playerCashout.cashout();
-
-        if (cashoutInfo instanceof CashoutStatus.NoBalance) {
+        if (cashoutInfo instanceof NoBalance) {
             const msgNoBalance = `You need at least 1L$ to cashout \n You had ${cashoutInfo.residualBalance} L$`;
             res.status(CONSTANTS.HTTP.CONFLICT).json(myUtils.generateJSONSkeleton(msgNoBalance, CONSTANTS.HTTP.CONFLICT));
         }
-        else if (cashoutInfo instanceof CashoutStatus.OutOfQuota) {
+        else if (cashoutInfo instanceof OutOfQuota) {
             const msgLimit = `You have reached the cashout limit for today, you can cashout again in ${cashoutInfo.remainingTime}`;
             res.status(CONSTANTS.HTTP.CONFLICT).json(myUtils.generateJSONSkeleton(msgLimit, CONSTANTS.HTTP.CONFLICT));
         }
@@ -311,14 +314,14 @@ router.post("/cashout", function (req, res) {
 router.get("/rod/auth", function (req, res) {
     const params = {
         rod_uuid: req.query.rod_uuid,
-        player_username: req.query.player_username,
+        player_uuid: req.query.player_uuid,
     };
 
     try {
         myUtils.ensureParametersOrValueNotNull(params);
 
         const rodToAuth = Rod.fromDB(params.rod_uuid);
-        const authStatus = rodToAuth.authenticate(params.player_username);
+        const authStatus = rodToAuth.authenticate(params.player_uuid);
 
         let msg;
         if (authStatus) {
@@ -337,11 +340,11 @@ router.get("/rod/auth", function (req, res) {
 
 router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, middlewares.fishpotMiddleware, function (req, res) {
     try {
-        const player = Player.fromDB(req.params.player_username);
+        const player = Player.fromDB(req.params.player_uuid);
         const rod = Rod.fromDB(req.params.rod_uuid);
         const buoy = Buoy.fromDB(req.params.buoy_uuid);
-        const inventory = Inventory.fromDB(req.params.player_username);
-        const balance = Cashout.fromDB(req.params.player_username);
+        const inventory = Inventory.fromDB(req.params.player_uuid);
+        const balance = Cashout.fromDB(req.params.player_uuid);
 
         const lotteryInfo = [], xpTriggers = [];
         let fishCaught, rodInfo, rankInfo, inventoryInfo;
@@ -359,7 +362,7 @@ router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, m
             fishCaught = new Fish(req.params.buoy_uuid);
             rankInfo = player.getRankInfo();
             rodInfo = Rod.cast(rod);
-            buoyInfo = buoy.updateAfterCast(fishCaught.fish_value, req.params.player_username);
+            buoyInfo = buoy.updateAfterCast(fishCaught.fish_value, req.params.player_uuid);
 
             if (rodInfo.alacrity_charges != 0) {
                 alacrityEnabled = true;

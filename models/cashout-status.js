@@ -1,3 +1,5 @@
+const myUtils = require("../utils");
+
 class NoBalance {
     constructor(residualBalance) {
         this.residualBalance = myUtils.roundToFixed(residualBalance);

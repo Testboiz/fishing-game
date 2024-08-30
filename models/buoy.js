@@ -126,25 +126,25 @@ WHERE buoy_uuid = :buoy_uuid;
             throw err;
         }
     }
-    #addSpookRecord(buoy_uuid, player_username) {
+    #addSpookRecord(buoy_uuid, player_uuid) {
         const sql = `
 INSERT INTO buoy_casts 
-(buoy_uuid, player_username, casts)
+(buoy_uuid, player_uuid, casts)
 VALUES
 (?,?,0)`;
         try {
-            db.prepare(sql).run(buoy_uuid, player_username);
+            db.prepare(sql).run(buoy_uuid, player_uuid);
         } catch (err) {
             throw err;
         }
     }
-    getCastsAndSpookTime(buoy_uuid, player_username) {
+    getCastsAndSpookTime(buoy_uuid, player_uuid) {
         const sql = `
 SELECT casts, previous_spook_time FROM buoy_casts
-WHERE buoy_uuid = ? AND player_username = ?;`;
+WHERE buoy_uuid = ? AND player_uuid = ?;`;
         try {
             const stmt = db.prepare(sql);
-            const rows = stmt.get(buoy_uuid, player_username);
+            const rows = stmt.get(buoy_uuid, player_uuid);
             if (rows) {
                 return {
                     casts: rows.casts,
@@ -152,8 +152,8 @@ WHERE buoy_uuid = ? AND player_username = ?;`;
                 };
             }
             else {
-                this.#addSpookRecord(buoy_uuid, player_username);
-                const newRows = stmt.get(buoy_uuid, player_username);
+                this.#addSpookRecord(buoy_uuid, player_uuid);
+                const newRows = stmt.get(buoy_uuid, player_uuid);
                 return {
                     casts: newRows.casts,
                     previous_spook_time: newRows.previous_spook_time
@@ -163,7 +163,7 @@ WHERE buoy_uuid = ? AND player_username = ?;`;
             throw err;
         }
     }
-    updateAfterCast(fishValue, player_username) {
+    updateAfterCast(fishValue, player_uuid) {
         const sqlBuoyUpdate = `
 UPDATE buoy 
     SET 
@@ -172,17 +172,17 @@ UPDATE buoy
 WHERE buoy_uuid = ?;
     `;
         const sqlCastUpdate = `
-INSERT INTO buoy_casts (buoy_uuid, player_username, casts) VALUES (?,?,0)
-    ON CONFLICT (buoy_uuid, player_username) DO UPDATE SET casts = casts + 1;
+INSERT INTO buoy_casts (buoy_uuid, player_uuid, casts) VALUES (?,?,0)
+    ON CONFLICT (buoy_uuid, player_uuid) DO UPDATE SET casts = casts + 1;
     `;
         try {
             const stmtBuoyUpdate = db.prepare(sqlBuoyUpdate);
             const stmtCastUpdate = db.prepare(sqlCastUpdate);
-            const updateAfterCastTransaction = db.transaction(function (buoyObject, player_username) {
+            const updateAfterCastTransaction = db.transaction(function (buoyObject, player_uuid) {
                 stmtBuoyUpdate.run(fishValue, fishValue * buoyObject.buoy_multiplier, buoyObject.buoy_uuid);
-                stmtCastUpdate.run(buoyObject.buoy_uuid, player_username);
+                stmtCastUpdate.run(buoyObject.buoy_uuid, player_uuid);
             });
-            updateAfterCastTransaction(this, player_username);
+            updateAfterCastTransaction(this, player_uuid);
         } catch (err) {
             throw err;
         }

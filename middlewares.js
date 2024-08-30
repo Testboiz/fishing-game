@@ -16,10 +16,10 @@ const middleware = {};
 const client = redis.createClient();
 client.connect().then(); // to make sure that the client has been properly awaited
 
-function checkSpook(res, buoy_uuid, player_username) {
+function checkSpook(res, buoy_uuid, player_uuid) {
     try {
         const fishedBuoy = Buoy.fromDB(buoy_uuid);
-        const rows = fishedBuoy.getCastsAndSpookTime(buoy_uuid, player_username);
+        const rows = fishedBuoy.getCastsAndSpookTime(buoy_uuid, player_uuid);
         const dateSql = myUtils.sqlToJSDateUTC(rows.previous_spook_time);
         const timeDifference = myUtils.getRemainingMiliseconds(dateSql);
         const remainingTime = myUtils.getHHMMSSFromMiliseconds(timeDifference);
@@ -59,27 +59,33 @@ In ${location}
 middleware.playerRegisterMiddleware = function registerPlayerMiddleware(req, res, next) {
     try {
         const params = {
+            player_uuid: req.query.player_uuid,
             player_username: req.query.player_username,
             player_display_name: req.query.player_display_name
         };
         myUtils.ensureParametersOrValueNotNull(params);
 
-        const player = Player.fromDB(params.player_username);
+        const isExists = Player.isExists(params.player_uuid);
 
-        if (player) {
-            if (player.player_display_name === params.player_display_name) {
+        if (isExists) {
+            const player = Player.fromDB(params.player_uuid);
+            if (player.player_username !== params.player_username) {
+                player.player_username = params.player_username;
+                player.changeUsername();
                 next();
             }
-            else {
+            if (player.player_display_name !== params.player_display_name) {
                 player.player_display_name = params.player_display_name;
                 player.changeDisplayName();
                 next();
             }
+            // else next normally
+            next();
         }
         else {
-            const newPlayer = new Player(params.player_username, params.player_display_name);
-            const newInventory = new Inventory({ player_username: params.player_username });
-            const newBalance = new Balance({ player_username: params.player_username });
+            const newPlayer = new Player(params.player_uuid, params.player_username, params.player_display_name);
+            const newInventory = new Inventory({ player_uuid: params.player_uuid });
+            const newBalance = new Balance({ player_uuid: params.player_uuid });
 
             const insertPlayerTransaction = db.transaction(function () {
                 newPlayer.addToDB();
@@ -98,6 +104,7 @@ middleware.playerRegisterMiddleware = function registerPlayerMiddleware(req, res
 middleware.castMiddleware = async function castCacheMiddleware(req, res, next) {
     try {
         const params = {
+            player_uuid: req.query.player_uuid,
             player_username: req.query.player_username,
             buoy_uuid: req.query.buoy_uuid,
             rod_uuid: req.query.rod_uuid,
@@ -106,7 +113,7 @@ middleware.castMiddleware = async function castCacheMiddleware(req, res, next) {
 
         const fishedBuoy = Buoy.fromDB(params.buoy_uuid);
         req.params = params; // this would simplify the code in the route
-        const keyString = params.buoy_uuid.toString() + params.rod_uuid.toString() + params.player_username.toString();
+        const keyString = params.buoy_uuid.toString() + params.rod_uuid.toString() + params.player_uuid.toString();
         const value = await client.get(keyString);
         const valueObject = JSON.parse(value);
 
@@ -117,11 +124,11 @@ middleware.castMiddleware = async function castCacheMiddleware(req, res, next) {
             let loginStatus = checkSpook(
                 res,
                 params.buoy_uuid,
-                params.player_username
+                params.player_uuid
             );
             let castInfo = fishedBuoy.getCastsAndSpookTime(
                 params.buoy_uuid,
-                params.player_username
+                params.player_uuid
             );
 
             // if u can login then add cache
@@ -135,12 +142,12 @@ middleware.castMiddleware = async function castCacheMiddleware(req, res, next) {
             }
         } else {
             if (valueObject.casts === CONSTANTS.CAST_LIMIT) {
-                let status = checkSpook(res, params.buoy_uuid, params.player_username);
+                let status = checkSpook(res, params.buoy_uuid, params.player_uuid);
                 if (status === true) {
                     // reset cast
                     let castInfo = fishedBuoy.getCastsAndSpookTime(
                         params.buoy_uuid,
-                        params.player_username
+                        params.player_uuid
                     );
                     valueObject.casts = castInfo.casts + 1; // this works due to a trigger
                     client.set(keyString, JSON.stringify(valueObject));
@@ -180,7 +187,7 @@ middleware.timeoutMiddleware = async function timeoutMiddleware(req, res, next) 
 
 middleware.fishpotMiddleware = function fishpotMiddleware(req, res, next) {
     try {
-        const balanceManager = Balance.fromDB(req.params.player_username);
+        const balanceManager = Balance.fromDB(req.params.player_uuid);
         const buoyManager = Buoy.fromDB(req.params.buoy_uuid);
 
         if (

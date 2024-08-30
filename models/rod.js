@@ -9,7 +9,7 @@ class Rod {
     #tasty_worms;
     #enchanted_worms;
     #magic_worms;
-    #player_username;
+    #player_uuid;
     #alacrity_charges;
     #rod_type;
     #selected_worm;
@@ -20,7 +20,7 @@ class Rod {
         tasty_worms = 0,
         enchanted_worms = 0,
         magic_worms = 0,
-        player_username = "",
+        player_uuid = "",
         alacrity_charges = 0,
         rod_type = 1,
         selected_worm = 1
@@ -30,7 +30,7 @@ class Rod {
         this.#tasty_worms = tasty_worms;
         this.#enchanted_worms = enchanted_worms;
         this.#magic_worms = magic_worms;
-        this.#player_username = player_username;
+        this.#player_uuid = player_uuid;
         this.#alacrity_charges = alacrity_charges;
         this.#rod_type = rod_type;
         this.#selected_worm = selected_worm;
@@ -52,7 +52,7 @@ class Rod {
                 tasty_worms: row.tasty_worms,
                 enchanted_worms: row.enchanted_worms,
                 magic_worms: row.magic_worms,
-                player_username: row.player_username,
+                player_uuid: row.player_uuid,
                 alacrity_charges: row.alacrity_charges,
                 rod_type: row.rod_type,
                 selected_worm: row.selected_worm
@@ -92,7 +92,7 @@ INSERT INTO rod_info (
     tasty_worms,
     enchanted_worms,
     magic_worms,
-    player_username,
+    player_uuid,
     alacrity_charges,
     rod_type
     )
@@ -102,7 +102,7 @@ VALUES (
     :tasty_worms,
     :enchanted_worms,
     :magic_worms,
-    :player_username,
+    :player_uuid,
     :alacrity_charges,
     :rod_type
     );`;
@@ -114,7 +114,7 @@ VALUES (
                 tasty_worms: this.#tasty_worms,
                 enchanted_worms: this.#enchanted_worms,
                 magic_worms: this.#magic_worms,
-                player_username: this.#player_username,
+                player_uuid: this.#player_uuid,
                 alacrity_charges: this.#alacrity_charges,
                 rod_type: this.#rod_type
             });
@@ -184,10 +184,10 @@ WHERE rod_uuid = ?;`;
         }
     }
 
-    authenticate(player_username) {
-        const sql = "SELECT * FROM rod_info WHERE rod_uuid = ? AND player_username = ?";
+    authenticate(player_uuid) {
+        const sql = "SELECT * FROM rod_info WHERE rod_uuid = ? AND player_uuid = ?";
         try {
-            const result = db.prepare(sql).get(this.#rod_uuid, player_username);
+            const result = db.prepare(sql).get(this.#rod_uuid, player_uuid);
             return (result != null);
         } catch (err) {
             throw err;

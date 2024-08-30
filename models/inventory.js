@@ -2,29 +2,29 @@ const db = require("../singletons/db");
 
 class Inventory {
     constructor({
-        player_username = "",
+        player_uuid = "",
         gold = 0,
         fish = 0,
         powder = 0
     }) {
-        this.player_username = player_username;
+        this.player_uuid = player_uuid;
         this.gold = gold;
         this.fish = fish;
         this.powder = powder;
     }
 
-    static fromDB(player_username) {
-        const sql = "SELECT * FROM inventory WHERE player_username = ?";
+    static fromDB(player_uuid) {
+        const sql = "SELECT * FROM inventory WHERE player_uuid = ?";
 
         try {
             const stmt = db.prepare(sql);
-            const row = stmt.get(player_username);
+            const row = stmt.get(player_uuid);
             if (!row) {
                 throw new Error("Invalid Key");
             }
 
             return new Inventory({
-                player_username: player_username,
+                player_uuid: player_uuid,
                 gold: row.gold,
                 powder: row.powder,
                 fish: row.fish
@@ -38,13 +38,13 @@ class Inventory {
     addToDB() {
         const sql = `
 INSERT INTO inventory
-(player_username, gold, fish, powder)
+(player_uuid, gold, fish, powder)
 VALUES
 (:username , :gold, :fish, :powder) `;
         try {
             const stmt = db.prepare(sql);
             stmt.run({
-                username: this.player_username,
+                username: this.player_uuid,
                 gold: this.gold,
                 fish: this.fish,
                 powder: this.powder
@@ -62,12 +62,12 @@ SET
 gold = :gold,
 powder = :powder,
 fish = :fish
-WHERE player_username = :username;
+WHERE player_uuid = :username;
 `;
         try {
             const stmt = db.prepare(sql);
             stmt.run({
-                username: this.player_username,
+                username: this.player_uuid,
                 gold: this.gold,
                 fish: this.fish,
                 powder: this.powder
