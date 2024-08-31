@@ -6,18 +6,22 @@ class FishLottery {
 
     constructor() {
         const sql = `
-SELECT name
+SELECT name,probability
 FROM fish_lottery
-WHERE probability < ?
-ORDER BY probability DESC
-LIMIT 1;
+WHERE CASE
+           WHEN :prob > (SELECT MAX(probability) FROM fish_lottery) THEN probability = (SELECT MAX(probability) FROM fish_lottery)
+           WHEN :prob < (SELECT MIN(probability) FROM fish_lottery) THEN probability = (SELECT MIN(probability) FROM fish_lottery)
+           ELSE probability > :prob
+       END
+ORDER BY probability ASC
+LIMIT 1
+;
         `;
         const prob = Math.random();
         try {
-            if (prob > CONSTANTS.FISH_LOTTERY_RATE) {
+            if (prob < CONSTANTS.FISH_LOTTERY_RATE) {
                 const stmt = db.prepare(sql);
-                const row = stmt.get(prob);
-
+                const row = stmt.get({ prob: prob });
                 this.#lotteryName = row.name;
             }
             else {
@@ -39,18 +43,18 @@ LIMIT 1;
             case "xp":
                 return lotteryMessage + "You've won 2 Fishing Experience\n";
             default:
-                if (this.#lotteryName.includes("Worms")) {
+                if (this.#lotteryName.includes("worm")) {
                     const stmtWormInfo = db.prepare(sqlWormInfo);
-                    const wormName = this.#setWormType(stmtWormInfo.get(rod_uuid));
-                    return lotteryMessage + `You've won 2 ${wormName}!\n`;
+                    const wormName = this.#setWormType(stmtWormInfo.get(rod_uuid).selected_worm);
+                    return lotteryMessage + `You've won 2 ${wormName}s!\n`;
                 }
                 else {
                     return "\n";
                 }
         }
     }
-    #setWormType() {
-        switch (this.#lotteryName) {
+    #setWormType(wormType) {
+        switch (wormType) {
             case 1:
                 return "Small Worms";
             case 2:
@@ -62,6 +66,9 @@ LIMIT 1;
             default:
                 return "Undefined Worm Type";
         }
+    }
+    get name() {
+        return this.#lotteryName;
     }
 };
 

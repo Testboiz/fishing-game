@@ -53,8 +53,8 @@ Rank (overall):  ${rankInfo.rank}
             : `You are the top fisher!`,
         `\n`,
         `Rank (monthly):  Coming Soon!\n`,
-        (lotteryInfo[0]) ? lotteryInfo[0].generateLotteryMessage() : "",
-        (lotteryInfo[1]) ? lotteryInfo[1].generateLotteryMessage() : "",
+        (lotteryInfo[0]) ? lotteryInfo[0].generateLotteryMessage(rodInfo.rod_uuid) : "",
+        (lotteryInfo[1]) ? lotteryInfo[1].generateLotteryMessage(rodInfo.rod_uuid) : "",
     ];
     return strArray.join("\n");
 }
@@ -127,7 +127,7 @@ function setRedisCastCache(buoy_uuid, rod_uuid, worm_type, {
 function handleLotteries(lotteryInfo, Rod, Inventory, xpTriggers) {
     try {
         for (var i = 0; i < lotteryInfo.length; i++) {
-            switch (lotteryInfo[i]) {
+            switch (lotteryInfo[i].name) {
                 case "worm":
                     Rod.addLotteryWorms();
                     break;
@@ -338,7 +338,7 @@ router.get("/rod/auth", function (req, res) {
     }
 });
 
-router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, middlewares.fishpotMiddleware, function (req, res) {
+router.put("/cast", /*middlewares.timeoutMiddleware,*/ middlewares.castMiddleware, middlewares.fishpotMiddleware, function (req, res) {
     try {
         const player = Player.fromDB(req.params.player_uuid);
         const rod = Rod.fromDB(req.params.rod_uuid);
