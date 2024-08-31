@@ -23,13 +23,12 @@ function checkSpook(res, buoy_uuid, player_uuid) {
         const dateSql = myUtils.sqlToJSDateUTC(rows.previous_spook_time);
         const timeDifference = myUtils.getRemainingMiliseconds(dateSql);
         const remainingTime = myUtils.getHHMMSSFromMiliseconds(timeDifference);
+        const isSpooked = fishedBuoy.checkSpook(player_uuid);
 
-        if (
-            rows.casts === 0 &&
-            timeDifference <= CONSTANTS.MILISECONDS_IN_DAY &&
-            timeDifference >= 0
-        ) {
-            // console.debug("rows :" + rows);
+        if (isSpooked) {
+            if (!myUtils.isWithinADay(dateSql)) {
+                fishedBuoy.spook(player_uuid);
+            }
             var msg = `Oops, You have Spooked this buoy, you can come back in ${remainingTime}`;
             res
                 .status(CONSTANTS.HTTP.TOO_MANY_REQUESTS)
@@ -52,7 +51,6 @@ That has won the ${numberString} L$ fishpot of this buoy
 In ${location}
 =============================
     `;
-    console.log(numberString);
     return msg;
 }
 
@@ -141,7 +139,7 @@ middleware.castMiddleware = async function castCacheMiddleware(req, res, next) {
                 next();
             }
         } else {
-            if (valueObject.casts === CONSTANTS.CAST_LIMIT) {
+            if (valueObject.casts >= CONSTANTS.CAST_LIMIT) {
                 let status = checkSpook(res, params.buoy_uuid, params.player_uuid);
                 if (status === true) {
                     // reset cast

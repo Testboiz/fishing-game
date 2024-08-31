@@ -109,6 +109,42 @@ WHERE buoy_uuid = :buoy_uuid;
             throw err;
         }
     }
+    spook(player_uuid) {
+        const sql = `
+UPDATE buoy_casts SET
+casts = 0,
+previous_spook_time = DATETIME('now')
+WHERE player_uuid = ? AND buoy_uuid = ?
+;`;
+        try {
+            db.prepare(sql).run(player_uuid, this.#buoy_uuid);
+        } catch (err) {
+            throw err;
+        }
+    }
+    checkSpook(player_uuid) {
+        const sql = `
+SELECT casts, previous_spook_time
+FROM buoy_casts
+WHERE player_uuid = ?
+;`;
+        try {
+            const stmt = db.prepare(sql);
+            const rows = stmt.get(player_uuid);
+            const spookDate = myUtils.sqlToJSDateUTC(rows.previous_spook_time);
+            const isWithinADay = myUtils.isWithinADay(spookDate);
+            console.log(spookDate);
+            if (rows.casts >= CONSTANTS.CAST_LIMIT || isWithinADay) {
+                return true;
+            } else {
+                return false;
+            }
+
+        } catch (err) {
+            throw err;
+        }
+    }
+
     #calculateTax(balance) {
         try {
             switch (this.#buoy_color) {

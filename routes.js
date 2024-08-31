@@ -338,7 +338,7 @@ router.get("/rod/auth", function (req, res) {
     }
 });
 
-router.put("/cast", /*middlewares.timeoutMiddleware,*/ middlewares.castMiddleware, middlewares.fishpotMiddleware, function (req, res) {
+router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, middlewares.fishpotMiddleware, function (req, res) {
     try {
         const player = Player.fromDB(req.params.player_uuid);
         const rod = Rod.fromDB(req.params.rod_uuid);
