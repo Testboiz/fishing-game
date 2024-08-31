@@ -88,7 +88,7 @@ utils.getRemainingMiliseconds = function getRemainingMiliseconds(dateObject) {
 utils.getHHMMSSFromMiliseconds = function getHHMMSSFromMiliseconds(miliseconds) {
     const date_hh_mm_ss = new Date(null);
     date_hh_mm_ss.setTime(miliseconds);
-    const remainingTime = date_hh_mm_ss.toISOString().slice(11, 19);
+    const remainingTime = date_hh_mm_ss.toISOString().slice(11, 19); // hh:mm:ss slice
     return remainingTime;
 };
 

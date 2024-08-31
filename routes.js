@@ -30,7 +30,6 @@ Tasty Worms: ${rodInfo.tasty_worms}
 Enchanted Worms: ${rodInfo.enchanted_worms}
 Magic Worms: ${rodInfo.magic_worms}
 Gold : ${inventoryInfo.gold}
-Gold : ${inventoryInfo.gold}
 
         `,
         (rodInfo.alacrity_charges != 0)
@@ -40,7 +39,7 @@ Gold : ${inventoryInfo.gold}
 You caught ${fishCaught.fish_name}
 Fishing Exp: ${rankInfo.xp} (+1)
 Fish: ${inventoryInfo.fish}
-Your Earnings: ${rankInfo.balance} L$ (+${fishCaught.fish_value}) 
+Your Earnings: ${myUtils.roundToFixed(rankInfo.balance)} L$ (+${fishCaught.fish_value}) 
 Rank Extras!: Coming Soon!
 Kingdoms Coming Soon! 
 
@@ -362,13 +361,7 @@ router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, m
             fishCaught = new Fish(req.params.buoy_uuid);
             rankInfo = player.getRankInfo();
             rodInfo = Rod.cast(rod);
-            buoyInfo = buoy.updateAfterCast(fishCaught.fish_value, req.params.player_uuid);
-
-            if (rodInfo.alacrity_charges != 0) {
-                alacrityEnabled = true;
-            }
-
-            req.params.worm_type = rodInfo.selected_worm;
+            buoy.updateAfterCast(fishCaught.fish_value, req.params.player_uuid);
 
             player.addXP(rod.computeXP(xpTriggers));
             balance.addBalance(fishCaught.multipliedValue);
@@ -376,7 +369,13 @@ router.put("/cast", middlewares.timeoutMiddleware, middlewares.castMiddleware, m
             inventory.updateDB();
         });
         castTransaction();
+        if (rodInfo.alacrity_charges != 0) {
+            alacrityEnabled = true;
+        }
+
+        req.params.worm_type = rodInfo.selected_worm;
         inventoryInfo = inventory.toObject();
+
         setRedisCastCache(
             req.params.buoy_uuid,
             req.params.rod_uuid,

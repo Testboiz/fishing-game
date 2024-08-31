@@ -246,38 +246,11 @@ INSERT INTO buoy_casts (buoy_uuid, player_uuid, casts) VALUES (?,?,0)
     getMultipliedFishValue(fish_value) {
         return this.#buoy_multiplier * fish_value;
     }
-    get buoy_uuid() {
-        return this.#buoy_uuid;
-    }
-    get buoy_balance() {
-        return this.#buoy_balance;
-    }
-    get fishpot() {
-        return this.#fishpot;
-    }
     get buoy_location_name() {
         return this.#buoy_location_name;
     }
-    get buoy_multiplier() {
-        return this.#buoy_multiplier;
-    }
-    get buoy_color() {
-        return this.#buoy_color;
-    }
-    set buoy_balance(buoy_balance) {
-        this.#buoy_balance = buoy_balance;
-    }
-    set fishpot(fishpot) {
-        this.#fishpot = fishpot;
-    }
     set buoy_location_name(buoy_location_name) {
         this.#buoy_location_name = buoy_location_name;
-    }
-    set buoy_multiplier(buoy_multiplier) {
-        this.#buoy_multiplier = buoy_multiplier;
-    }
-    set buoy_color(buoy_color) {
-        this.#buoy_color = buoy_color;
     }
 
 }

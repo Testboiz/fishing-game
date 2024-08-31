@@ -103,7 +103,6 @@ WHERE player_uuid = :player_uuid;
         }
     }
     getRankInfo() {
-        // ERROR LIKELY
         const sql = `
 WITH ranked_fishers AS (
 SELECT
@@ -164,17 +163,11 @@ WHERE ro1.player_uuid = ?;
         }
     }
 
-    get player_uuid() {
-        return this.#player_uuid;
-    }
     get player_username() {
         return this.#player_username;
     }
     get player_display_name() {
         return this.#player_display_name;
-    }
-    set player_uuid(player_uuid) {
-        this.#player_uuid = player_uuid;
     }
     set player_username(player_username) {
         this.#player_username = player_username;

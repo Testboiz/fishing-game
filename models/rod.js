@@ -226,9 +226,6 @@ WHERE rod_uuid = ?
         this.#alacrity_charges = this.#alacrity_charges + alacrity_charges;
     }
 
-    get rod_uuid() {
-        return this.#rod_uuid;
-    }
     get small_worms() {
         return this.#small_worms;
     }
@@ -246,21 +243,6 @@ WHERE rod_uuid = ?
     }
     get selected_worm() {
         return this.#selected_worm;
-    }
-    set small_worms(small_worms) {
-        this.#small_worms = small_worms;
-    }
-    set tasty_worms(tasty_worms) {
-        this.#tasty_worms = tasty_worms;
-    }
-    set enchanted_worms(enchanted_worms) {
-        this.#enchanted_worms = enchanted_worms;
-    }
-    set magic_worms(magic_worms) {
-        this.#magic_worms = magic_worms;
-    }
-    set alacrity_charges(alacrity_charges) {
-        this.#alacrity_charges = alacrity_charges;
     }
 }
 
