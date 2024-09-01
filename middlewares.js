@@ -16,6 +16,14 @@ const middleware = {};
 const client = redis.createClient();
 client.connect().then(); // to make sure that the client has been properly awaited
 
+/**
+ * Checks the castable status of a buoy
+ * If its spooked, therefore its not fishable
+ * @param {*} res the resource to be sent for custom spooked response
+ * @param {string} buoy_uuid the uuid of the buoy the player is fishing on
+ * @param {string} player_uuid the uuid of the fishing player
+ * @return {boolean} `true` its if its castable and `false` when its spooked (not castable) otherwise
+ */
 function checkSpook(res, buoy_uuid, player_uuid) {
     try {
         const fishedBuoy = Buoy.fromDB(buoy_uuid);
@@ -41,6 +49,14 @@ function checkSpook(res, buoy_uuid, player_uuid) {
     }
 }
 
+/**
+ * Generates the fish jackpot (fishpot) winning message 
+ * when the player gets one
+ * @param {string} player_username the username of the player that got the fishpot
+ * @param {string} numberString the formatted jackpot value in 2 decimal point
+ * @param {string} location the buoy location name (if configured by the buoy owner)
+ * @return {string} the fishpot message
+ */
 function generateFishpotMessage(player_username, numberString, location) {
     let msg = `
 =============================
@@ -54,6 +70,17 @@ In ${location}
     return msg;
 }
 
+/**
+ * Handles the registration process of a player and 
+ * updating the player information (username/display name)
+ * @param {Express.Request} req the request body which contains these properties
+ * @property {string} player_uuid the unique uuid of each player, for identification purposes
+ * @property {string} player_username the unique username of the player, for in game identification only
+ * @property {string} player_display_name the display name of a player, for customization purposes
+ * 
+ * @param {Express.Response} res the result message which would return the error message here
+ * @param {Express.NextFunction} next the function to continue to the next middleware or the endpoint
+ */
 middleware.playerRegisterMiddleware = function registerPlayerMiddleware(req, res, next) {
     try {
         const params = {
@@ -98,7 +125,19 @@ middleware.playerRegisterMiddleware = function registerPlayerMiddleware(req, res
         myUtils.handleError(err, res);
     }
 };
-
+/**
+ * Handles the cast verification process, using Redis caching process
+ * This middleware has been designed to minimize verification queries on the database
+ * So only when the cast reaches the limit, or the player changes buoy, then the verification process is done
+ * @param {Express.Request} req the request body which contains these properties
+ * @property {string} player_uuid the unique uuid of each player, for identification purposes
+ * @property {string} player_username the unique username of the player, for in game identification only
+ * @property {string} buoy_uuid the unique uuid of the buoy that the player is fishing on
+ * @property {string} rod_uuid the unique uuid of the rod owned by the player
+ * 
+ * @param {Express.Response} res the result message which would return the error message here
+ * @param {Express.NextFunction} next the function to continue to the next middleware or the endpoint
+ */
 middleware.castMiddleware = async function castCacheMiddleware(req, res, next) {
     try {
         const params = {
@@ -162,6 +201,17 @@ middleware.castMiddleware = async function castCacheMiddleware(req, res, next) {
     }
 };
 
+/**
+ * Blocks casting if the timeout cache still exists, using Redis caching process
+ * @param {Express.Request} req the request body which contains these properties
+ * @property {string} player_uuid the unique uuid of each player, for identification purposes
+ * @property {string} player_username the unique username of the player, for in game identification only
+ * @property {string} buoy_uuid the unique uuid of the buoy that the player is fishing on
+ * @property {string} rod_uuid the unique uuid of the rod owned by the player
+ * 
+ * @param {Express.Response} res the result message which would return the error message here
+ * @param {Express.NextFunction} next the function to continue to the next middleware or the endpoint
+ */
 middleware.timeoutMiddleware = async function timeoutMiddleware(req, res, next) {
     const key = req.query.buoy_uuid.toString() + req.query.rod_uuid.toString();
 
@@ -183,6 +233,17 @@ middleware.timeoutMiddleware = async function timeoutMiddleware(req, res, next) 
     }
 };
 
+/**
+ * Handles fishpot, and awards the lucky player if the probability suffices
+ * @param {Express.Request} req the request body which contains these properties
+ * @property {string} player_uuid the unique uuid of each player, for identification purposes
+ * @property {string} player_username the unique username of the player, for in game identification only
+ * @property {string} buoy_uuid the unique uuid of the buoy that the player is fishing on
+ * @property {string} rod_uuid the unique uuid of the rod owned by the player
+ * 
+ * @param {Express.Response} res the result message which would return the error message here
+ * @param {Express.NextFunction} next the function to continue to the next middleware or the endpoint
+ */
 middleware.fishpotMiddleware = function fishpotMiddleware(req, res, next) {
     try {
         const balanceManager = Balance.fromDB(req.params.player_uuid);

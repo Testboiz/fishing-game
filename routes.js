@@ -21,7 +21,15 @@ const { NoBalance, OutOfQuota } = require("./models/cashout-status");
 const client = redis.createClient();
 client.connect().then();
 
-// Helper function to handle the complexity of multiline string handling
+/**
+ * A View function that generates the fishing response string for the HTTP response
+ * @param {object} fishCaught The result set of the fish that is caught 
+ * @param {object} rodInfo The result set of the rod from the player
+ * @param {object} rankInfo The result set of the information of the rank of the player
+ * @param {object} inventoryInfo The result set of the information of the player's inventory
+ * @param {object} lotteryInfo The result set of the fish lottery winnings (if any) of the player
+ * @return {string} The formatted message ready to be sent as a response
+ */
 function generateResponseString(fishCaught, rodInfo, rankInfo, inventoryInfo, lotteryInfo) { // view
     var strArray = [
         `
@@ -58,11 +66,26 @@ Rank (overall):  ${rankInfo.rank}
     return strArray.join("\n");
 }
 
+/**
+ * Callback function for `setRedisCastCashe()`
+ * @param {Error} err the error object to be handled elsewhere
+ * @param {*} reply the object to be replied
+ */
 function __setRedisCastCacheCallback(err, reply) {
     if (err) throw err;
     console.log(reply);
 }
 
+
+/**
+ * Sets the cast cache and its timeout to set limits on casting speed
+ * @param {string} buoy_uuid the unique uuid of the buoy that the player is fishing on
+ * @param {string} rod_uuid the unique uuid of the rod owned by the player
+ * @param {number} worm_type the selected worm that is used by the worm
+ * @param {boolean} Object.alacrity indicator of the player having consumed alacrity potion
+ * @param {boolean} Object.shubbie indicator if player has shubbie
+ * @param {string} Object.shubbieType Type (rarity) of the shubbie
+ */
 function setRedisCastCache(buoy_uuid, rod_uuid, worm_type, {
     alacrity = false,
     shubbie = false,
@@ -123,6 +146,14 @@ function setRedisCastCache(buoy_uuid, rod_uuid, worm_type, {
     }
 }
 
+
+/**
+ * Processes the winnings (if any) of the fish lotteries
+ * @param {Array<Inventory>} lotteryInfo the winnings of the fish lottery
+ * @param {Rod} Rod the Rod Object that has casted the lottery
+ * @param {Inventory} Inventory the Inventory object of the player
+ * @param {Array<boolean>} xpTriggers the triggers from earning XP lotteries for later computation
+ */
 function handleLotteries(lotteryInfo, Rod, Inventory, xpTriggers) {
     try {
         for (var i = 0; i < lotteryInfo.length; i++) {
