@@ -1,6 +1,18 @@
 const db = require("../singletons/db");
 
+/**
+ * The class representing the fish that has been caught by the player
+ * @property {string} fish_name The name of the fish
+ * @property {number} fish_value The value of the fish
+ * @property {number} multipliedValue The multiplied value of the fish from the buoy multiplier
+ * @class Fish
+ */
 class Fish {
+    /**
+     * Creates an instance of Fish.
+     * @param {string} buoy_uuid the buoy uuid where the fish is fished out
+     * @memberof Fish
+     */
     constructor(buoy_uuid) {
         const sql = `
 WITH probability AS (

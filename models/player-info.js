@@ -1,3 +1,16 @@
+/**
+ * Represents the player info and its rank
+ * @property {string} player_uuid The uuid of the player
+ * @property {string} player_username the unique username of the player, for in game identification only
+ * @property {string} player_display_name the display name of a player, for customization purposes
+ * @property {number} balance The balance of the player
+ * @property {number} xp The xp of the player
+ * @property {number} rank The rank of the player
+ * @property {string} above_display_name The display name of someone having higher rank than the player
+ * @property {number} xp_difference The xp difference of someone having higher rank than the player
+ * @property {number} above_rank The rank of someone having higher rank than the player
+ * @class PlayerInfo
+ */
 class PlayerInfo {
     constructor({
         player_uuid,

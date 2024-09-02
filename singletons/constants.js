@@ -1,3 +1,4 @@
+/** Constants object to store various magic values */
 const constants = {
     BASE_XP: {
         BEGINNER: 1,

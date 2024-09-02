@@ -1,6 +1,13 @@
 const db = require("../singletons/db");
 const PlayerInfo = require("./player-info");
 
+/**
+ * Represents the player and handles the registration and rank process
+ * @property {string} player_uuid The uuid of the player
+ * @property {string} player_username the unique username of the player, for in game identification only
+ * @property {string} player_display_name the display name of a player, for customization purposes
+ * @class Player
+ */
 class Player {
     #player_uuid;
     #player_username;
@@ -11,7 +18,14 @@ class Player {
         this.#player_username = player_username;
         this.#player_display_name = player_display_name;
     }
-
+    /**
+     * Creates an instance of Player from an entry of the database.
+     * Returns Error if the uuid is invalid
+     * @static
+     * @param {string} player_uuid The uuid of the player.
+     * @returns {Player} The instance of Player
+     * @memberof Player
+     */
     static fromDB(player_uuid) {
         const sql = "SELECT * FROM player WHERE player_uuid = ?";
         try {
@@ -27,6 +41,13 @@ class Player {
             throw err;
         }
     }
+    /**
+     * Checks if a player exists on the database
+     * @static
+     * @param {string} player_uuid The uuid of the player.
+     * @return {boolean} the status of existence of the player in the database
+     * @memberof Player
+     */
     static isExists(player_uuid) {
         const sql = "SELECT * FROM player WHERE player_uuid = ?";
         try {
@@ -41,6 +62,10 @@ class Player {
             throw err;
         }
     }
+    /**
+     * Adds an entry of the Player object to the database
+     * @memberof Player
+     */
     addToDB() {
         const sqlPlayer = `
 INSERT INTO player (
@@ -70,6 +95,11 @@ VALUES (
             throw err;
         }
     }
+    /**
+     * Commits the change of the display name of the player
+     *
+     * @memberof Player
+     */
     changeDisplayName() {
         const sql = `
 UPDATE player SET
@@ -86,6 +116,11 @@ WHERE player_uuid = :player_uuid;
             throw err;
         }
     }
+    /**
+     * Commits the change of the username of the player
+     *
+     * @memberof Player
+     */
     changeUsername() {
         const sql = `
 UPDATE player SET
@@ -102,6 +137,12 @@ WHERE player_uuid = :player_uuid;
             throw err;
         }
     }
+
+    /**
+     * Gets the player information and rank of the player, after casting
+     * @return {PlayerInfo} The object representing the information
+     * @memberof Player
+     */
     getRankInfo() {
         const sql = `
 WITH ranked_fishers AS (
@@ -153,6 +194,12 @@ WHERE ro1.player_uuid = ?;
         }
     }
 
+    /**
+     * Adds XP to the player
+     *
+     * @param {number} xpAmnount The amnount of XP to be added
+     * @memberof Player
+     */
     addXP(xpAmnount) {
         const sql = `UPDATE rank_overall  SET xp = xp + ? WHERE player_uuid = ?;`;
         try {

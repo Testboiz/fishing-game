@@ -5,6 +5,16 @@ const myUtils = require("../utils");
 
 const { NoBalance, OutOfQuota, CashoutSuccess } = require("./cashout-status");
 
+/**
+ * Represents the balance information and cashout logic of the player
+ * @property {string} player_uuid The uuid of the player
+ * @property {number} balance The balance of the player
+ * @property {number} cashout_quota The remaining quota to be cashed out on the day
+ * @property {string} last_major_cashout The last time the cashout resets the quota
+ * @property {number} maximum_cashout_value The maximum value of the `cashout_quota`
+ *
+ * @class Balance
+ */
 class Balance {
     #player_uuid;
     #balance;
@@ -13,6 +23,16 @@ class Balance {
     #maximum_cashout_value;
 
 
+    /**
+     * Creates an instance of Balance.
+     * @param {Object} options The configuration object for the Inventory
+     * @param {string} [options.player_uuid=""] The uuid of the player (defaults to empty string)
+     * @param {string} [options.balance=0] The balance of the player (defaults to 0)
+     * @param {string} options.cashout_quota The cashout quota of the player (defaults to 300)
+     * @param {string} options.last_major_cashout The last time cashout resets the quota (defaults to today in Unix Epoch)
+     * @param {string} options.maximum_cashout_value The maximum cashout value of the player (defaults to 300)
+    * @memberof Balance
+     */
     constructor({
         player_uuid = "",
         balance = 0,
@@ -26,7 +46,14 @@ class Balance {
         this.#last_major_cashout = last_major_cashout;
         this.#maximum_cashout_value = maximum_cashout_value;
     }
-
+    /**
+     * Creates an instance of Balance from an entry of the database.
+     * Returns Error if the uuid is invalid
+     * @static
+     * @param {string} player_uuid The uuid of the player.
+     * @returns {Balance} The instance of Balance
+     * @memberof Balance
+     */
     static fromDB(player_uuid) {
         const sqlCashoutInfo = `
 SELECT cashout.cashout_budget, cashout.last_major_cashout, cashout.balance, cashout_values.cashout_value
@@ -49,7 +76,10 @@ WHERE cashout.player_uuid = ?
             throw err;
         }
     }
-
+    /**
+     * Adds an entry of the Inventory object to the database
+     * @memberof Balance
+     */
     addToDB() {
         const sql = `
 INSERT INTO cashout (
@@ -74,6 +104,11 @@ VALUES (
             throw err;
         }
     }
+    /**
+     * Adds balance (usually from fishing) to the balance object
+     * @param {number} addedBalance The balance to be added
+     * @memberof Balance
+     */
     addBalance(addedBalance) {
         const sql = `
 UPDATE cashout 
@@ -89,6 +124,14 @@ SET
         }
     }
 
+    /**
+     * Cashes out the earned balance of the player.
+     * 
+     * Accounts for the cashout limits and the balance of the player 
+     * 
+     * If the cashout is done over 24 hours, it would reset the cashout quota
+     * @memberof Balance
+     */
     cashout() {
         const sqlUpdateCashoutWithinADay = `
 UPDATE cashout

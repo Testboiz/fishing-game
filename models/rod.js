@@ -3,6 +3,19 @@ const CONSTANTS = require("../singletons/constants");
 
 const myUtils = require("../utils");
 
+/**
+ * Represents the Rod object and its cast and worm utilities
+ * @property {string} rod_uuid The uuid of the rod
+ * @property {number} small_worms The small worms count for the rod
+ * @property {number} tasty_worms The tasty worms count for the rod
+ * @property {number} enchanted_worms The enchanted worms count for the rod
+ * @property {number} magic_worms The magic worms count for the rod
+ * @property {string} player_uuid The uuid of the player
+ * @property {number} alacrity_charges The amnount of alacrity (speed boost) active on the rod
+ * @property {number} rod_type The type of the rod in enumerated integer
+ * @property {number} selected_worm The selected worm type in enumerated integer
+ * @class Rod
+ */
 class Rod {
     #rod_uuid;
     #small_worms;
@@ -14,6 +27,20 @@ class Rod {
     #rod_type;
     #selected_worm;
 
+    /**
+     * Creates an instance of Rod.
+     * @param {Object} options The configuration object for the Rod
+     * @param {string} options.rod_uuid The uuid of the rod
+     * @param {number} [options.small_worms=0] The small worms count for the rod (defaults to 0)
+     * @param {number} [options.tasty_worms=0] The tasty worms count for the rod (defaults to 0)
+     * @param {number} [options.enchanted_worms=0] The enchanted worms count for the rod (defaults to 0)
+     * @param {number} [options.magic_worms=0] The magic worms count for the rod (defaults to 0)
+     * @param {string} [options.player_uuid=""] The uuid of the player (defaults to empty string)
+     * @param {number} [options.alacrity_charges=0] The amnount of alacrity (speed boost) active on the rod (defaults to 0)
+     * @param {number} [options.rod_type=1] The type of the rod in enumerated integer (defaults to Begginer Rod)
+     * @param {number} [options.selected_worm=1] The selected worm type in enumerated integer (defaults to Small Worms)
+     * @memberof Rod
+     */
     constructor({
         rod_uuid,
         small_worms = 0,
@@ -35,7 +62,14 @@ class Rod {
         this.#rod_type = rod_type;
         this.#selected_worm = selected_worm;
     }
-
+    /**
+     * Creates an instance of Rod from an entry of the database.
+     * Returns Error if the uuid is invalid
+     * @static
+     * @param {string} player_uuid The uuid of the player.
+     * @returns {Rod} The instance of Rod
+     * @memberof Rod
+     */
     static fromDB(rod_uuid) {
         const sql = "SELECT * FROM rod_info WHERE rod_uuid = ?";
 
@@ -62,6 +96,12 @@ class Rod {
             throw err;
         }
     }
+
+    /**
+     * Gets the base XP of each rod type
+     * @return {number} the base XP value of the each rod type 
+     * @memberof Rod
+     */
     #getBaseXP() {
         const ROD_TYPES = CONSTANTS.ENUMS.ROD;
         const BASE_XP = CONSTANTS.BASE_XP;
@@ -84,6 +124,10 @@ class Rod {
                 throw new Error("Invalid Rod");
         }
     }
+    /**
+     * Adds an entry of the Rod object to the database
+     * @memberof Rod
+     */
     addToDB() {
         const sql = `
 INSERT INTO rod_info (
@@ -123,6 +167,10 @@ VALUES (
         }
     }
 
+    /**
+     * Commits changes of the object to the database
+     * @memberof Rod
+     */
     updateToDB() {
         const sql = `
 UPDATE rod_info SET
@@ -147,6 +195,12 @@ WHERE rod_uuid = :rod_uuid
             throw err;
         }
     }
+    /**
+     * Performs the cast logic and provides the updated Rod object
+     * @param {Rod} RodObject The rod to be cast
+     * @returns The updated Rod object after casting
+     * @memberof Rod
+     */
     static cast(RodObject) {
         const sql = `
 UPDATE rod_info 
@@ -166,7 +220,12 @@ WHERE rod_uuid = ?;`;
             throw err;
         }
     }
-
+    /**
+     *  Computes the XP gained from each cast, with fish lottery consideration
+     * @param {Array<boolean>} xpLotteryTriggers The XP lottery trigger array
+     * @returns The computed XP
+     * @memberof Rod
+     */
     computeXP(xpLotteryTriggers) {
         try {
             var eXP = this.#getBaseXP();
@@ -183,7 +242,13 @@ WHERE rod_uuid = ?;`;
             throw err;
         }
     }
-
+    /**
+     * Checks if the rod has been transfered or not 
+     * If the transfer is done, it would block the usability
+     * @param {string} player_uuid The player uuid to be verified
+     * @returns The boolean value of the existence of the record that verifies the ownership of the rod
+     * @memberof Rod
+     */
     authenticate(player_uuid) {
         const sql = "SELECT * FROM rod_info WHERE rod_uuid = ? AND player_uuid = ?";
         try {
@@ -193,6 +258,10 @@ WHERE rod_uuid = ?;`;
             throw err;
         }
     }
+    /**
+     * Adds the worms if the lottery winnings are worms.
+     * @memberof Rod
+     */
     addLotteryWorms() {
         const sql = `
 UPDATE rod_info
@@ -210,18 +279,38 @@ WHERE rod_uuid = ?
             throw err;
         }
     }
+    /**
+     * Adds small worms to the rod 
+     * @param {number} small_worms The amnount of small worms to be added
+     */
     add_small_worms(small_worms) {
         this.#small_worms = this.#small_worms + small_worms;
     }
+    /**
+     * Adds tasty worms to the rod 
+     * @param {number} tasty_worms The amnount of tasty worms to be added
+     */
     add_tasty_worms(tasty_worms) {
         this.#tasty_worms = this.#tasty_worms + tasty_worms;
     }
+    /**
+     * Adds enchanted worms to the rod 
+     * @param {number} enchanted_worms The amnount of enchanted worms to be added
+     */
     add_enchanted_worms(enchanted_worms) {
         this.#enchanted_worms = this.#enchanted_worms + enchanted_worms;
     }
+    /**
+     * Adds magic worms to the rod 
+     * @param {number} magic_worms The amnount of magic worms to be added
+     */
     add_magic_worms(magic_worms) {
         this.#magic_worms = this.#magic_worms + magic_worms;
     }
+    /**
+     * Adds alacrity charges to the rod 
+     * @param {number} alacrity_charges The amnount of alacrity charges to be added
+     */
     add_alacrity_charges(alacrity_charges) {
         this.#alacrity_charges = this.#alacrity_charges + alacrity_charges;
     }

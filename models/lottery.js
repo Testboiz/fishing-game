@@ -1,6 +1,11 @@
 const db = require("../singletons/db");
 const CONSTANTS = require("../singletons/constants");
 
+/**
+ * Represents the lottery winnings of the player (if any)
+ * @property {string} lotteryName The name of the lottery
+ * @class FishLottery
+ */
 class FishLottery {
     #lotteryName;
 
@@ -32,6 +37,13 @@ LIMIT 1
             throw err;
         }
     }
+    /**
+     * Generates the lottery winning message with each particular case of lottery winnings
+     *
+     * @param {string} rod_uuid the uuid of the rod that catches the lottery
+     * @return {string} The lottery winning message 
+     * @memberof FishLottery
+     */
     generateLotteryMessage(rod_uuid) {
         const lotteryMessage = "Fish Lottery:\n";
         const sqlWormInfo = "SELECT selected_worm FROM rod_info WHERE rod_uuid = ?";
@@ -53,6 +65,12 @@ LIMIT 1
                 }
         }
     }
+    /**
+     * Private helper function to generate specific worm name from lottery winning
+     * @param {number} wormType The number that represents each worm type in the database
+     * @return {string} The worm name 
+     * @memberof FishLottery
+     */
     #setWormType(wormType) {
         switch (wormType) {
             case 1:

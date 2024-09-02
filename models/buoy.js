@@ -2,6 +2,20 @@ const CONSTANTS = require("../singletons/constants");
 const db = require("../singletons/db");
 const myUtils = require("../utils");
 
+/**
+ * Represents the spot where `Player` with their `Rod` fish in
+ *
+ *
+ * @class Buoy
+ * 
+ * @property {string} buoy_uuid - The uuid for the buoy.
+ * @property {number} buoy_balance - The initial balance of the buoy (defaults to 0).
+ * @property {number} fishpot - The initial value of the fishpot (defaults to 0).
+ * @property {string} buoy_location_name - The name of the location where the buoy is rezzed.
+ * @property {number} buoy_multiplier - The multiplier applied to the buoy (defaults to 1).
+ * @property {string} buoy_color - The color of the buoy (defaults to blue).
+ *
+ */
 class Buoy {
     #buoy_uuid;
     #buoy_balance;
@@ -10,6 +24,19 @@ class Buoy {
     #buoy_multiplier;
     #buoy_color;
 
+    /**
+     * Creates a new instance of Buoy, to be registered to the database
+     *
+     * @class Buoy
+     * @constructor
+     * @param {Object} options - The configuration object for the Buoy.
+     * @param {string} options.buoy_uuid - The uuid of the buoy.
+     * @param {number} [options.buoy_balance=0] - The initial balance of the buoy (defaults to 0).
+     * @param {number} [options.fishpot=0] - The initial value of the fishpot (defaults to 0).
+     * @param {string} options.buoy_location_name - The name of the location where the buoy is rezzed.
+     * @param {number} [options.buoy_multiplier=1] - The multiplier applied to the buoy (defaults to 1).
+     * @param {string} [options.buoy_color=CONSTANTS.ENUMS.BUOY_COLOR.BLUE] - The color of the buoy (defaults to blue).
+     */
     constructor({
         buoy_uuid,
         buoy_balance = 0,
@@ -25,6 +52,14 @@ class Buoy {
         this.#buoy_multiplier = buoy_multiplier;
         this.#buoy_color = buoy_color;
     }
+    /**
+     * Creates an instance of Buoy from an entry of the database.
+     * Returns Error if the uuid is invalid
+     * @static
+     * @param {string} buoy_uuid The uuid of the buoy.
+     * @returns {Buoy} The instance of Buoy
+     * @memberof Buoy
+     */
     static fromDB(buoy_uuid) {
         const sql = "SELECT * FROM buoy WHERE buoy_uuid = ?";
 
@@ -49,6 +84,10 @@ class Buoy {
         }
     }
 
+    /**
+     * Adds an entry of the Buoy object to the database
+     * @memberof Buoy
+     */
     addToDB() {
         const sql = `
 INSERT INTO buoy (
@@ -83,6 +122,10 @@ VALUES (
         }
     }
 
+    /**
+     * Commits changes of the object to the database
+     * @memberof Buoy
+     */
     updateToDB() {
         const sql = `
 UPDATE buoy
@@ -109,6 +152,14 @@ WHERE buoy_uuid = :buoy_uuid;
             throw err;
         }
     }
+
+
+    /**
+     * Prevents player from fishing on the buoy for 24 hours,
+     * after casting limit being raeched
+     * @param {*} player_uuid The uuid of the player. 
+     * @memberof Buoy
+     */
     spook(player_uuid) {
         const sql = `
 UPDATE buoy_casts SET
@@ -122,6 +173,13 @@ WHERE player_uuid = ? AND buoy_uuid = ?
             throw err;
         }
     }
+
+    /**
+     * Checks the conditions that permits spooking, to prevent accidential spooking
+     * @param {string} player_uuid The uuid of the player
+     * @returns {boolean} The status of the player spooked to the buoy
+     * @memberof Buoy
+     */
     checkSpook(player_uuid) {
         const sql = `
 SELECT casts, previous_spook_time
@@ -145,6 +203,12 @@ WHERE player_uuid = ?
         }
     }
 
+    /**
+     * Calculates the taxed balance that is added to the buoy 
+     * @param {number} balance
+     * @returns {number} The taxed balance to be added to the buoy
+     * @memberof Buoy
+     */
     #calculateTax(balance) {
         try {
             switch (this.#buoy_color) {
@@ -162,6 +226,12 @@ WHERE player_uuid = ?
             throw err;
         }
     }
+    /**
+     * Helper function to add the spook record to the database
+     * @param {string} buoy_uuid The uuid of the buoy
+     * @param {string} player_uuid The uuid of the player
+     * @memberof Buoy
+     */
     #addSpookRecord(buoy_uuid, player_uuid) {
         const sql = `
 INSERT INTO buoy_casts 
@@ -174,6 +244,15 @@ VALUES
             throw err;
         }
     }
+
+    /**
+     * Gets the record of cast and spook time, for spook verification
+     * @param {string} buoy_uuid The uuid of the buoy
+     * @param {string} player_uuid The uuid of the player
+     * @returns {number} `casts` the count of casts of the player in the buoy
+     * @returns {string} `previous_spook_time` the last time playerr spooked on the buoy
+     * @memberof Buoy
+     */
     getCastsAndSpookTime(buoy_uuid, player_uuid) {
         const sql = `
 SELECT casts, previous_spook_time FROM buoy_casts
@@ -199,6 +278,13 @@ WHERE buoy_uuid = ? AND player_uuid = ?;`;
             throw err;
         }
     }
+
+    /**
+     * Updates the buoy and buoy_casts table after a cast
+     * @param {number} fishValue The fish value (multiplied with multiplier) to subtract the buoy balance
+     * @param {string} player_uuid The uuid of the player
+     * @memberof Buoy
+     */
     updateAfterCast(fishValue, player_uuid) {
         const sqlBuoyUpdate = `
 UPDATE buoy 
@@ -224,6 +310,12 @@ INSERT INTO buoy_casts (buoy_uuid, player_uuid, casts) VALUES (?,?,0)
         }
     }
 
+    /**
+     * Gets the fishpot value, and updates the fishpot to zero
+     * @param {Buoy} Balance The Buoy object that contains the fishpot balance
+     * @returns {string} The formatted string of the fishpot
+     * @memberof Buoy
+     */
     getFishpot(Balance) {
         try {
             const fishpotValue = this.#fishpot;
@@ -240,9 +332,22 @@ INSERT INTO buoy_casts (buoy_uuid, player_uuid, casts) VALUES (?,?,0)
             throw err;
         }
     }
+
+    /**
+     * Adds the balance to the buoy, with its tax counted
+     * @param {number} Balance The untaxed balance that is going to be added
+     * @memberof Buoy
+     */
     addBalance(balance) {
         this.#buoy_balance += this.#calculateTax(balance);
     }
+
+    /**
+     * Multiplies the fish caught value with the buoy multiplier
+     * @param {number} fish_value The base fish value to be multiplied
+     * @returns {number} The multiplied fish value
+     * @memberof Buoy
+     */
     getMultipliedFishValue(fish_value) {
         return this.#buoy_multiplier * fish_value;
     }
