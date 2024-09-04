@@ -180,7 +180,11 @@ function handleLotteries(lotteryInfo, Rod, Inventory, xpTriggers) {
 }
 
 router.get("/", function (_, res) {
-    res.json(myUtils.generateJSONSkeleton("Server is up!"));
+    try {
+        res.json(myUtils.generateJSONSkeleton("Server is up!"));
+    } catch (err) {
+        myUtils.handleError(err, res);
+    }
 });
 
 router.post("/rod/register", middlewares.playerRegisterMiddleware, function (req, res) {
@@ -244,7 +248,12 @@ router.post("/rod/add-worms", function (req, res) {
         }
         rod.updateToDB();
         let msg = `You have bought ${params.worm_amnount} ${params.worm_type.replace("_", " ")} `;
-        const responseJSON = myUtils.generateJSONSkeleton(msg);
+        let worms = params.worm_amnount;
+        const obj = {
+            text: msg,
+            wormCount: worms
+        };
+        const responseJSON = myUtils.generateJSONSkeleton(obj);
         res.json(responseJSON);
     }
     catch (err) {
