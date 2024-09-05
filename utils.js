@@ -1,6 +1,9 @@
 const CONSTANTS = require("./singletons/constants");
 const utils = {};
 
+// These code is the most reused code in the entire codebase, 
+// mainly about response, error and time handling
+
 /**
  * An error class specifically used to handle parameters being null, undefined or NaN
  *

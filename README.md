@@ -7,8 +7,9 @@ TODO
 - [ ] Add API documentation
 - [ ] Add sample SqLite database
 - [ ] Polish up README
-- [ ] handle mistakes wrong HTTP method
+- [ ] Handle mistakes wrong HTTP method
 - [ ] Add overrides of error handling (remove debug stack on common errors)
+- [ ] Refactor out the buoy tax values
 
 My attempt to recreate the backend of LGH Fish Hunt minigame from [Second Life](secondlife.com) in [Express.Js](https://github.com/expressjs/express)
 
@@ -22,7 +23,7 @@ This backend API doesn't always has to be used only in Second Life though, This 
 
 ## API Reference
 
-Last Updated (4 September 2024)
+Last Updated (5 September 2024)
 
 ### General Endpoints
 
@@ -67,11 +68,13 @@ As of now, the general error message would be in this form
 
 ### Rod Interactions
 
-Handles interactions about quthentication in `/rod/auth`, registering in `/rod/register` and adding worms in `/rod/add-worms`
+Handles interactions about authentication in `/rod/auth`, registering in `/rod/register` and adding worms in `/rod/add-worms`
 
 ```
 GET /rod/auth
 ```
+
+Authenticates the player's ownership of the rod
 
 | Parameter     | Type          | Description                                              |
 | ------------- | ------------- | -------------------------------------------------------- |
@@ -104,6 +107,8 @@ Otherwise, if the rod and player combination is incorrect, then this error messa
 POST /rod/register
 ```
 
+Registers new rod that is bought by the player
+
 Parameters :
 
 | Parameter             | Type          | Description                                                   |
@@ -135,6 +140,10 @@ The successful message would be like this
 }
 ```
 
+> Note. If the player is not registered, a middleware would register the player,
+> if the player has some changes on their information, the middleware would
+> update the player information on the database.
+
 There is a specific error when player is registered for this endpoint which would be like this
 
 ```json
@@ -147,6 +156,8 @@ There is a specific error when player is registered for this endpoint which woul
 ```
 POST /rod/add-worms
 ```
+
+Adds worms after the player purchased it from the vendors.
 
 Parameters :
 
@@ -181,5 +192,88 @@ TODO > override error message to this form
 ```
 
 ### Buoy Interactions
+
+Handles interactions about registering in `/buoy/register`, setting location name in `/buoy/set-location-name` and adds balance in `/buoy/add-balance`.
+
+```
+POST /buoy/register
+```
+
+Registers the buoy to the system.
+
+> Note. If the player is not registered, a middleware would register the player,
+> if the player has some changes on their information, the middleware would also
+> update the player information on the database.
+
+| Parameter             | Type          | Description                                                   |
+| --------------------- | ------------- | ------------------------------------------------------------- |
+| `buoy_uuid`           | string (UUID) | The uuid of the buoy                                          |
+| `buoy_color`          | string        | The color of the buoy                                         |
+| `player_uuid`         | string (UUID) | The uuid of the player (for registering/updating player)      |
+| `player_username`     | string        | The unique username of the player, for in game identification |
+| `player_display_name` | string        | The display name of a player, for customization purposes      |
+
+The accepted values of `buoy_color` is `"red"`, `"yellow"`, and `blue`. Those colors only differ from the way taxes (commisions) are handled.
+
+The success message would be like this.
+
+```json
+{
+  "message": "Buoy has been registered",
+  "status": 200
+}
+```
+
+Otherwise if the buoy has been registered, it would send this message
+
+```json
+{
+  "message": "Buoy is already registered",
+  "status": 409
+}
+```
+
+```
+POST /buoy/set-location-name
+```
+
+Sets the location name of the buoy, if havent already. This is optional and used for customization purposes
+
+| Parameter            | Type          | Description                   |
+| -------------------- | ------------- | ----------------------------- |
+| `buoy_uuid`          | string (UUID) | The uuid of the buoy          |
+| `buoy_location_name` | string        | The location name of the buoy |
+
+The success message would be like this
+
+```json
+{
+  "message": "Buoy location set",
+  "status": 200
+}
+```
+
+```
+POST /buoy/add-balance
+```
+
+Adds balance to the buoy, in order for the player to be able to fish on it (Taxes/Commision Apply)
+
+The taxes in each buoy color is on this table
+
+| Color  | Tax (percentage) |
+| ------ | ---------------- |
+| red    | 0.5              |
+| yellow | 0.25             |
+| blue   | 0.15             |
+
+The success message after adding balance is this
+
+```json
+{
+  "message": "Buoy balance added by (value) L$ Tax applied",
+  "status": 200
+}
+```
 
 ### Player Interactions
